@@ -63,6 +63,102 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const transactionData = await request.json()
+
+    const {
+      id,
+      fundId,
+      accountId,
+      type,
+      amount,
+      currency,
+      price,
+      fee,
+      feeCurrency,
+      fromLocation,
+      toLocation,
+      note
+    } = transactionData
+
+    if (!id || !fundId) {
+      return NextResponse.json(
+        { error: 'Transaction ID and Fund ID are required' },
+        { status: 400 }
+      )
+    }
+
+    // Update transaction
+    const transaction = await db.transaction.update({
+      where: { id },
+      data: {
+        accountId: accountId || null,
+        type,
+        amount,
+        currency,
+        price: price || null,
+        fee: fee || null,
+        feeCurrency: feeCurrency || null,
+        fromLocation: fromLocation || null,
+        toLocation: toLocation || null,
+        note: note || null
+      }
+    })
+
+    // Recalculate fund state
+    await recalculateFund(fundId)
+
+    return NextResponse.json({
+      success: true,
+      transaction,
+      message: 'Transaction updated successfully'
+    })
+
+  } catch (error) {
+    console.error('Error updating transaction:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    const fundId = searchParams.get('fundId')
+
+    if (!id || !fundId) {
+      return NextResponse.json(
+        { error: 'Transaction ID and Fund ID are required' },
+        { status: 400 }
+      )
+    }
+
+    // Delete transaction
+    await db.transaction.delete({
+      where: { id }
+    })
+
+    // Recalculate fund state
+    await recalculateFund(fundId)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Transaction deleted successfully'
+    })
+
+  } catch (error) {
+    console.error('Error deleting transaction:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)

@@ -9,12 +9,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Plus, AlertCircle } from 'lucide-react'
+import { Plus, AlertCircle, Trash2 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface TransactionFormProps {
   onSubmit: (data: any) => void
   onCancel: () => void
   fundId: string
+  initialData?: any
+  transactionId?: string
 }
 
 const transactionTypes = [
@@ -37,18 +50,20 @@ const locations = [
   'Ví khác'
 ]
 
-export default function TransactionForm({ onSubmit, onCancel, fundId }: TransactionFormProps) {
+export default function TransactionForm({ onSubmit, onCancel, fundId, initialData, transactionId }: TransactionFormProps) {
   const [formData, setFormData] = useState({
-    type: '',
-    amount: '',
-    price: '',
-    fee: '',
-    feeCurrency: '',
-    fromLocation: '',
-    toLocation: '',
-    note: ''
+    type: initialData?.type || '',
+    amount: initialData?.amount?.toString() || '',
+    price: initialData?.price?.toString() || '',
+    fee: initialData?.fee?.toString() || '',
+    feeCurrency: initialData?.feeCurrency || '',
+    fromLocation: initialData?.fromLocation || '',
+    toLocation: initialData?.toLocation || '',
+    note: initialData?.note || ''
   })
   const [error, setError] = useState<string | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   const selectedTransactionType = transactionTypes.find(t => t.value === formData.type)
   const needsPrice = ['buy_usdt', 'sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
@@ -76,43 +91,72 @@ export default function TransactionForm({ onSubmit, onCancel, fundId }: Transact
     }
 
     try {
+      const method = transactionId ? 'PUT' : 'POST'
+      const body = {
+        fundId,
+        id: transactionId,
+        ...formData,
+        amount: parseFloat(formData.amount),
+        price: needsPrice ? parseFloat(formData.price) : null,
+        fee: needsFee ? parseFloat(formData.fee) : null,
+        currency: selectedTransactionType?.currency || 'VND'
+      }
+
       const response = await fetch('/api/transactions', {
-        method: 'POST',
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          fundId,
-          ...formData,
-          amount: parseFloat(formData.amount),
-          price: needsPrice ? parseFloat(formData.price) : null,
-          fee: needsFee ? parseFloat(formData.fee) : null,
-          currency: selectedTransactionType?.currency || 'VND'
-        })
+        body: JSON.stringify(body)
       })
 
       const result = await response.json()
 
       if (response.ok) {
         onSubmit(result)
-        // Reset form
-        setFormData({
-          type: '',
-          amount: '',
-          price: '',
-          fee: '',
-          feeCurrency: '',
-          fromLocation: '',
-          toLocation: '',
-          note: ''
-        })
+        // Reset form if not editing
+        if (!transactionId) {
+          setFormData({
+            type: '',
+            amount: '',
+            price: '',
+            fee: '',
+            feeCurrency: '',
+            fromLocation: '',
+            toLocation: '',
+            note: ''
+          })
+        }
         setError(null)
       } else {
-        setError(result.error || 'Lỗi khi tạo giao dịch')
+        setError(result.error || 'Lỗi khi lưu giao dịch')
       }
     } catch (error) {
       console.error('Error submitting transaction:', error)
       setError('Lỗi kết nối, vui lòng thử lại')
+    }
+  }
+
+  const handleDelete = async () => {
+    if (deleteConfirmation !== 'XOA') return
+
+    try {
+      const response = await fetch(`/api/transactions?id=${transactionId}&fundId=${fundId}`, {
+        method: 'DELETE'
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        onSubmit(result) // Refresh parent
+      } else {
+        setError(result.error || 'Lỗi khi xóa giao dịch')
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error)
+      setError('Lỗi kết nối, vui lòng thử lại')
+    } finally {
+      setIsDeleteDialogOpen(false)
     }
   }
 
@@ -123,9 +167,9 @@ export default function TransactionForm({ onSubmit, onCancel, fundId }: Transact
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Tạo giao dịch mới</CardTitle>
+        <CardTitle>{transactionId ? 'Chỉnh sửa giao dịch' : 'Tạo giao dịch mới'}</CardTitle>
         <CardDescription>
-          Nhập thông tin chi tiết cho giao dịch của bạn
+          {transactionId ? 'Cập nhật thông tin giao dịch' : 'Nhập thông tin chi tiết cho giao dịch của bạn'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -267,13 +311,58 @@ export default function TransactionForm({ onSubmit, onCancel, fundId }: Transact
           </div>
 
           {/* Nút hành động */}
-          <div className="flex justify-end space-x-4">
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Hủy
-            </Button>
-            <Button type="submit">
-              Tạo giao dịch
-            </Button>
+          <div className="flex justify-between items-center">
+            {transactionId ? (
+              <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="destructive" className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Xóa
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Bạn có chắc chắn muốn xóa?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Hành động này không thể hoàn tác. Giao dịch sẽ bị xóa vĩnh viễn và toàn bộ lịch sử quỹ sẽ được tính toán lại.
+                      <div className="mt-4">
+                        <Label htmlFor="confirm-delete" className="text-sm font-medium text-gray-700">
+                          Nhập "XOA" để xác nhận:
+                        </Label>
+                        <Input
+                          id="confirm-delete"
+                          value={deleteConfirmation}
+                          onChange={(e) => setDeleteConfirmation(e.target.value)}
+                          className="mt-2"
+                          placeholder="XOA"
+                        />
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setDeleteConfirmation('')}>Hủy</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      disabled={deleteConfirmation !== 'XOA'}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Xóa vĩnh viễn
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <div></div> // Spacer
+            )}
+
+            <div className="flex space-x-4">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Hủy
+              </Button>
+              <Button type="submit">
+                {transactionId ? 'Cập nhật' : 'Tạo giao dịch'}
+              </Button>
+            </div>
           </div>
         </form>
       </CardContent>
@@ -282,36 +371,68 @@ export default function TransactionForm({ onSubmit, onCancel, fundId }: Transact
 }
 
 // Component modal để mở form
-export function TransactionModal({ fundId }: { fundId?: string }) {
-  const [isOpen, setIsOpen] = useState(false)
+export function TransactionModal({ fundId, transaction, onClose }: { fundId?: string, transaction?: any, onClose?: () => void }) {
+  const [isOpen, setIsOpen] = useState(!!transaction)
+
+  // If transaction prop is provided, control open state from parent or just use it to init form
+  // Actually, if transaction is provided, we assume we are in edit mode and might be controlled by parent.
+  // But to keep it simple, let's stick to the existing pattern or adapt.
+
+  // Better pattern: If transaction is passed, we are editing.
+  // But the existing usage in page.tsx is <TransactionModal fundId={...} /> which implies it manages its own button.
+  // For editing, we probably want to render the modal conditionally or pass `open` state.
+
+  // Let's split this.
+  // Keep TransactionModal as a self-contained "Create New" button + modal.
+  // Create a new EditTransactionModal or just use the Dialog directly in TransactionHistory.
+
+  // However, to reuse code, let's make TransactionModal accept `open` and `onOpenChange` props optionally.
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open)
+    if (!open && onClose) onClose()
+  }
+
+  // If controlled (e.g. for edit), use props. If not, use internal state.
+  // But React hooks can't be conditional.
+
+  // Let's just update the existing component to handle both cases if possible, or just keep it for "Create" and make a new one for "Edit".
+  // Actually, replacing the whole file content allows me to rewrite it.
 
   const handleSubmit = async (data: any) => {
     console.log('Transaction data:', data)
-    // TODO: Call API to save transaction
     setIsOpen(false)
+    if (onClose) onClose()
     // Trigger page refresh to show new data
     window.location.reload()
   }
 
+  // If transaction is provided, we assume the parent controls opening via a key or conditional rendering.
+  // But wait, the parent `TransactionHistory` will likely render this modal when "Edit" is clicked.
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Giao dịch mới
-        </Button>
+        {!transaction && (
+          <Button className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Giao dịch mới
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo giao dịch mới</DialogTitle>
+          <DialogTitle>{transaction ? 'Chỉnh sửa giao dịch' : 'Tạo giao dịch mới'}</DialogTitle>
           <DialogDescription>
-            Nhập thông tin chi tiết cho giao dịch của bạn
+            {transaction ? 'Cập nhật thông tin giao dịch' : 'Nhập thông tin chi tiết cho giao dịch của bạn'}
           </DialogDescription>
         </DialogHeader>
         <TransactionForm
           onSubmit={handleSubmit}
-          onCancel={() => setIsOpen(false)}
+          onCancel={() => handleOpenChange(false)}
           fundId={fundId || ''}
+          initialData={transaction}
+          transactionId={transaction?.id}
         />
       </DialogContent>
     </Dialog>
