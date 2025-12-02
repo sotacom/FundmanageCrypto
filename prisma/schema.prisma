@@ -1,0 +1,92 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Fund {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  initialVnd  Float    @default(0) // Vốn ban đầu bằng VND
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  accounts     Account[]
+  transactions Transaction[]
+  assetHoldings AssetHolding[]
+  fees         Fee[]
+}
+
+model Account {
+  id        String   @id @default(cuid())
+  fundId    String
+  name      String   // Tên tài khoản (Binance 1, Binance 2, Ví lạnh 1, etc.)
+  type      String   // binance, cold_wallet, earn
+  platform  String?  // binance, trust_wallet, etc.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  fund         Fund           @relation(fields: [fundId], references: [id])
+  assetHoldings AssetHolding[]
+  transactions Transaction[]
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  fundId       String
+  accountId    String?
+  type         String   // capital_in, capital_out, buy_usdt, sell_usdt, transfer_usdt, buy_btc, sell_btc, transfer_btc, earn_interest
+  amount       Float
+  currency     String   // VND, USDT, BTC
+  price        Float?   // Giá khi giao dịch (VND/USDT, USDT/BTC)
+  fee          Float?   // Phí giao dịch
+  feeCurrency  String?  // Đơn vị phí
+  fromLocation String?  // Nơi gửi
+  toLocation   String?  // Nơi nhận
+  note         String?
+  costBasis    Float?   // Giá vốn trung bình tại thời điểm giao dịch (cho lệnh Sell)
+  realizedPnL  Float?   // Lãi/lỗ thực (cho lệnh Sell)
+  createdAt    DateTime @default(now())
+  
+  fund    Fund     @relation(fields: [fundId], references: [id])
+  account Account? @relation(fields: [accountId], references: [id])
+}
+
+model AssetHolding {
+  id        String   @id @default(cuid())
+  fundId    String
+  accountId String?
+  asset     String   // VND, USDT, BTC
+  amount    Float
+  avgPrice  Float?   // Giá mua trung bình (VND/USDT, USDT/BTC)
+  location  String?  // Vị trí lưu trữ
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  fund    Fund     @relation(fields: [fundId], references: [id])
+  account Account? @relation(fields: [accountId], references: [id])
+}
+
+model Fee {
+  id           String   @id @default(cuid())
+  fundId       String
+  transactionId String?
+  type         String   // trading, transfer, withdrawal
+  amount       Float
+  currency     String   // BTC, USDT, VND
+  description  String?
+  createdAt    DateTime @default(now())
+  
+  fund Fund @relation(fields: [fundId], references: [id])
+}
