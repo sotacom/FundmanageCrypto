@@ -17,7 +17,17 @@ model Fund {
   id          String   @id @default(cuid())
   name        String
   description String?
-  initialVnd  Float    @default(0) // Vốn ban đầu bằng VND
+  
+  // Legacy field (deprecated, keep for migration)
+  initialVnd  Float    @default(0)
+  
+  // Vốn chủ sở hữu (Owner's Equity)
+  initialCapital     Float @default(0) // Vốn góp ban đầu
+  additionalCapital  Float @default(0) // Vốn góp thêm
+  withdrawnCapital   Float @default(0) // Vốn đã rút
+  
+  // Lợi nhuận chưa phân phối (Retained Earnings)
+  retainedEarnings   Float @default(0) // Tự động tính
   
   // Cách tính giá TB khi nhận lãi Earn
   earnInterestMethod String @default("reduce_avg_price") // 'reduce_avg_price' | 'keep_avg_price'

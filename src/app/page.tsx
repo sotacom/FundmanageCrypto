@@ -9,6 +9,7 @@ import { Plus, TrendingUp, TrendingDown, Wallet, DollarSign, Bitcoin, RefreshCw 
 import { TransactionModal } from '@/components/TransactionForm'
 import TransactionHistory from '@/components/TransactionHistory'
 import FundSettings from '@/components/FundSettings'
+import PnLAnalysis from '@/components/PnLAnalysis'
 
 interface FundData {
   id: string
@@ -507,6 +508,15 @@ export default function FundDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* PnL Analysis Tab */}
+          <TabsContent value="nav" className="space-y-4">
+            <PnLAnalysis
+              fundId={fundData.id}
+              fundData={fundData}
+              currentPrices={currentPrices}
+            />
           </TabsContent>
 
           <TabsContent value="avg-price" className="space-y-4">

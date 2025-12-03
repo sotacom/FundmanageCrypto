@@ -11,9 +11,18 @@ interface LocationState {
 
 export async function recalculateFund(fundId: string) {
     // 1. Fetch fund settings to know earnInterestMethod
-    const fundSettings = await db.fund.findUnique({
+    // Fetch fund with equity fields
+    const fund = await db.fund.findUnique({
         where: { id: fundId },
-        select: { earnInterestMethod: true }
+        select: {
+            id: true,
+            name: true,
+            earnInterestMethod: true,
+            initialCapital: true,
+            additionalCapital: true,
+            withdrawnCapital: true,
+            retainedEarnings: true,
+        }
     })
 
     // 2. Fetch all transactions sorted by date
@@ -49,6 +58,23 @@ export async function recalculateFund(fundId: string) {
         // Logic per transaction type
         switch (tx.type) {
             case 'capital_in':
+                // Góp vốn
+                // Nếu là " initial" hoặc chưa có initialCapital => vốn ban đầu
+                if (tx.note?.includes('initial') || fund?.initialCapital === 0) {
+                    await db.fund.update({
+                        where: { id: fundId },
+                        data: { initialCapital: { increment: tx.amount } }
+                    })
+                    console.log(`Capital In (Initial): +${tx.amount} VND`)
+                } else {
+                    // Vốn góp thêm
+                    await db.fund.update({
+                        where: { id: fundId },
+                        data: { additionalCapital: { increment: tx.amount } }
+                    })
+                    console.log(`Capital In (Additional): +${tx.amount} VND`)
+                }
+
                 // Góp vốn: Tăng VND
                 updateLocation('VND', null, tx.amount)
                 getAssetState('VND').amount += tx.amount
@@ -57,6 +83,13 @@ export async function recalculateFund(fundId: string) {
                 break
 
             case 'capital_out':
+                // Rút vốn/lợi nhuận
+                await db.fund.update({
+                    where: { id: fundId },
+                    data: { withdrawnCapital: { increment: tx.amount } }
+                })
+                console.log(`Capital Out: -${tx.amount} VND`)
+
                 // Rút vốn: Giảm VND
                 updateLocation('VND', null, -tx.amount)
                 getAssetState('VND').amount -= tx.amount
@@ -230,7 +263,8 @@ export async function recalculateFund(fundId: string) {
                 // Lãi suất USDT: 2 cách tính
                 const earnState = getAssetState('USDT')
 
-                if (fundSettings?.earnInterestMethod === 'keep_avg_price') {
+                const earnMethod = fund?.earnInterestMethod || 'reduce_avg_price';
+                if (earnMethod === 'keep_avg_price') {
                     // ✨ CÁCH 2: Giữ nguyên giá TB
                     // Không thay đổi avgPrice, chỉ tăng amount
                     earnState.amount += tx.amount
