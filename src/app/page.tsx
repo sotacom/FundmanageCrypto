@@ -11,6 +11,7 @@ import TransactionHistory from '@/components/TransactionHistory'
 import FundSettings from '@/components/FundSettings'
 import PnLAnalysis from '@/components/PnLAnalysis'
 import { formatCurrency, formatNumber, formatPercentage } from '@/lib/format'
+import { SiteHeader } from '@/components/site-header'
 
 interface FundData {
   id: string
@@ -232,96 +233,36 @@ export default function FundDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{fundData.name}</h1>
-              <p className="text-sm text-muted-foreground">Quản lý quỹ đầu tư cá nhân</p>
-            </div>
+    <div className="min-h-screen bg-background">
+      <SiteHeader
+        fundName={fundData.name}
+        currentPrices={currentPrices}
+        pricesLoading={pricesLoading}
+        onRefreshPrices={fetchCurrentPrices}
+        fundId={fundData.id}
+      />
 
-            {/* Price Display */}
-            <div className="flex items-center gap-4">
-              {currentPrices && (
-                <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">USDT/VND:</span>
-                      <span className="text-sm font-semibold text-green-600">
-                        {formatNumber(currentPrices.usdtVnd, 0)}
-                      </span>
-                      <Badge
-                        variant={currentPrices.sources.usdtVnd === 'binance_p2p' ? 'default' : 'secondary'}
-                        className="text-xs h-5"
-                      >
-                        {currentPrices.sources.usdtVnd === 'binance_p2p' ? '🟢 Live' : '⚪ Default'}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-muted-foreground">BTC/USDT:</span>
-                      <span className="text-sm font-semibold text-orange-600">
-                        {formatNumber(currentPrices.btcUsdt, 2)}
-                      </span>
-                      <Badge
-                        variant={currentPrices.sources.btcUsdt === 'binance_spot' ? 'default' : 'secondary'}
-                        className="text-xs h-5"
-                      >
-                        {currentPrices.sources.btcUsdt === 'binance_spot' ? '🟢 Live' : '⚪ Default'}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="border-l pl-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={fetchCurrentPrices}
-                      disabled={pricesLoading}
-                      className="h-8"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${pricesLoading ? 'animate-spin' : ''}`} />
-                    </Button>
-                    {currentPrices.timestamp && (
-                      <p className="text-xs text-muted-foreground mt-1 text-center">
-                        {new Date(currentPrices.timestamp).toLocaleTimeString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <TransactionModal fundId={fundData?.id} />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-none shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tổng NAV</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-blue-100">Tổng NAV</CardTitle>
+              <TrendingUp className="h-4 w-4 text-blue-100" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {formatCurrency(fundData.currentNav.vnd, 'VND')}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Vốn băn đầu: {formatNumber(fundData.equity.initialCapital, 0)} VND
+              <p className="text-xs text-blue-100 mt-1 opacity-80">
+                Vốn ban đầu: {formatNumber(fundData.equity.initialCapital, 0)} VND
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Vốn Chủ Sở Hữu</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Vốn Chủ Sở Hữu</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -335,13 +276,13 @@ export default function FundDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lợi Nhuận</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Lợi Nhuận</CardTitle>
               <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${fundData.equity.retainedEarnings >= 0 ? 'text-green-600' : 'text-red-600'
+              <div className={`text-2xl font-bold ${fundData.equity.retainedEarnings >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                 }`}>
                 {fundData.equity.retainedEarnings >= 0 ? '+' : ''}
                 {formatCurrency(fundData.equity.retainedEarnings, 'VND')}
@@ -352,13 +293,13 @@ export default function FundDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">ROI</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">ROI</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${fundData.equity.retainedEarnings >= 0 ? 'text-green-600' : 'text-red-600'
+              <div className={`text-2xl font-bold ${fundData.equity.retainedEarnings >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                 }`}>
                 {fundData.equity.totalCapital > 0
                   ? `${((fundData.equity.retainedEarnings / fundData.equity.totalCapital) * 100).toFixed(2)}%`
@@ -384,7 +325,7 @@ export default function FundDashboard() {
 
           <TabsContent value="holdings" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="h-5 w-5" />
@@ -392,7 +333,7 @@ export default function FundDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-blue-600">
+                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                     {formatCurrency(fundData.holdings.vnd, 'VND')}
                   </div>
                   <div className="mt-2 pt-2 border-t">
@@ -406,7 +347,7 @@ export default function FundDashboard() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Wallet className="h-5 w-5" />
@@ -414,7 +355,7 @@ export default function FundDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-green-600">
+                  <div className="text-3xl font-bold text-green-600 dark:text-green-400">
                     {formatNumber(fundData.holdings.usdt, 2)} USDT
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
@@ -431,7 +372,7 @@ export default function FundDashboard() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Bitcoin className="h-5 w-5" />
@@ -439,7 +380,7 @@ export default function FundDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-orange-600">
+                  <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
                     {formatCurrency(fundData.holdings.btc, 'BTC')}
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
@@ -460,7 +401,7 @@ export default function FundDashboard() {
 
           <TabsContent value="nav-analysis" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
                 <CardHeader>
                   <CardTitle>NAV theo VND</CardTitle>
                   <CardDescription>
@@ -487,13 +428,13 @@ export default function FundDashboard() {
                   <div className="pt-2 border-t">
                     <div className="flex justify-between text-lg font-bold">
                       <span>Tổng NAV:</span>
-                      <span className="text-green-600">{formatCurrency(fundData.currentNav.vnd, 'VND')}</span>
+                      <span className="text-green-600 dark:text-green-400">{formatCurrency(fundData.currentNav.vnd, 'VND')}</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
                 <CardHeader>
                   <CardTitle>NAV theo USDT</CardTitle>
                   <CardDescription>
@@ -520,7 +461,7 @@ export default function FundDashboard() {
                   <div className="pt-2 border-t">
                     <div className="flex justify-between text-lg font-bold">
                       <span>Tổng NAV:</span>
-                      <span className="text-green-600">{formatNumber(fundData.currentNav.usdt, 2)} USDT</span>
+                      <span className="text-green-600 dark:text-green-400">{formatNumber(fundData.currentNav.usdt, 2)} USDT</span>
                     </div>
                   </div>
                 </CardContent>
@@ -539,7 +480,7 @@ export default function FundDashboard() {
 
           <TabsContent value="avg-price" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
                 <CardHeader>
                   <CardTitle>Giá mua trung bình USDT/VND</CardTitle>
                   <CardDescription>
@@ -547,13 +488,13 @@ export default function FundDashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-blue-600">
+                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                     {formatNumber(fundData.avgPrices.usdt.avgPrice, 0)} VND/USDT
                   </div>
 
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-blue-900">Phương pháp Earn:</span>
+                      <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Phương pháp Earn:</span>
                       <Badge variant={fundData.earnInterestMethod === 'keep_avg_price' ? 'default' : 'secondary'}>
                         {fundData.earnInterestMethod === 'keep_avg_price' ? 'Giữ nguyên' : 'Giảm giá TB'}
                       </Badge>
@@ -571,7 +512,7 @@ export default function FundDashboard() {
                     </div>
                     <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">USDT từ Earn:</span>
-                      <span className="font-semibold text-green-600">
+                      <span className="font-semibold text-green-600 dark:text-green-400">
                         +{formatNumber(fundData.avgPrices.usdt.totalEarn, 2)} USDT
                       </span>
                     </div>
@@ -585,7 +526,7 @@ export default function FundDashboard() {
                     )}
                     <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">Giá P2P hiện tại:</span>
-                      <span className="font-medium text-green-600">
+                      <span className="font-medium text-green-600 dark:text-green-400">
                         {formatNumber(currentPrices?.usdtVnd || 0, 0) || 'N/A'} VND
                       </span>
                     </div>
@@ -593,7 +534,7 @@ export default function FundDashboard() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card/50 backdrop-blur-sm border-muted/60 shadow-sm hover:shadow-md transition-all">
                 <CardHeader>
                   <CardTitle>Giá mua trung bình BTC/USDT</CardTitle>
                   <CardDescription>
@@ -601,7 +542,7 @@ export default function FundDashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-orange-600">
+                  <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
                     {formatNumber(fundData.avgPrices.btc.avgPrice, 2)} USDT/BTC
                   </div>
                   <div className="mt-4 space-y-2">
@@ -615,14 +556,14 @@ export default function FundDashboard() {
                     </div>
                     <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">Giá Spot hiện tại:</span>
-                      <span className="font-medium text-orange-600">
+                      <span className="font-medium text-orange-600 dark:text-orange-400">
                         {formatNumber(currentPrices?.btcUsdt || 0, 2) || 'N/A'} USDT
                       </span>
                     </div>
                     {currentPrices && fundData.avgPrices.btc.avgPrice > 0 && (
                       <div className="flex justify-between text-sm pt-2 border-t">
                         <span className="text-muted-foreground">Chênh lệch:</span>
-                        <span className={`font-semibold ${currentPrices.btcUsdt > fundData.avgPrices.btc.avgPrice ? 'text-green-600' : 'text-red-600'
+                        <span className={`font-semibold ${currentPrices.btcUsdt > fundData.avgPrices.btc.avgPrice ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                           }`}>
                           {currentPrices.btcUsdt > fundData.avgPrices.btc.avgPrice ? '+' : ''}
                           {((currentPrices.btcUsdt - fundData.avgPrices.btc.avgPrice) / fundData.avgPrices.btc.avgPrice * 100).toFixed(2)}%
