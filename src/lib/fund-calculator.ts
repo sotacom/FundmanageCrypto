@@ -68,13 +68,13 @@ export async function recalculateFund(fundId: string) {
                 const usdtPrice = tx.price || 0
 
                 // ✨ Xử lý phí giao dịch P2P
-                let usdtReceived = usdtPurchaseAmount
+                let usdtBuyReceived = usdtPurchaseAmount
                 let vndSpent = usdtPurchaseAmount * usdtPrice
 
                 if (tx.fee && tx.fee > 0) {
                     if (tx.feeCurrency === 'USDT') {
                         // Phí thu bằng USDT → giảm USDT nhận được
-                        usdtReceived -= tx.fee
+                        usdtBuyReceived -= tx.fee
                         console.log(`Buy USDT: Fee ${tx.fee} USDT deducted from received`)
                     } else if (tx.feeCurrency === 'VND') {
                         // Phí thu bằng VND → tăng VND phải chi
@@ -90,12 +90,12 @@ export async function recalculateFund(fundId: string) {
                 // 2. Tăng USDT & Tính lại AvgPrice (dùng số thực tế nhận được)
                 const usdtState = getAssetState('USDT')
                 const totalUsdtCost = (usdtState.amount * usdtState.avgPrice) + vndSpent
-                const totalUsdtAmount = usdtState.amount + usdtReceived
+                const totalUsdtAmount = usdtState.amount + usdtBuyReceived
 
                 usdtState.avgPrice = totalUsdtCost / totalUsdtAmount
                 usdtState.amount = totalUsdtAmount
 
-                updateLocation('USDT', tx.toLocation, usdtReceived)
+                updateLocation('USDT', tx.toLocation, usdtBuyReceived)
                 break
 
             case 'sell_usdt':
@@ -105,7 +105,7 @@ export async function recalculateFund(fundId: string) {
 
                 // ✨ Xử lý phí giao dịch P2P
                 let vndReceived = usdtSellAmount * usdtSellPrice
-                let usdtFeeAmount = 0
+                let usdtSellFeeAmount = 0
 
                 if (tx.fee && tx.fee > 0) {
                     if (tx.feeCurrency === 'VND') {
@@ -114,7 +114,7 @@ export async function recalculateFund(fundId: string) {
                         console.log(`Sell USDT: Fee ${tx.fee} VND deducted from proceeds`)
                     } else if (tx.feeCurrency === 'USDT') {
                         // Phí thu bằng USDT → tracking riêng
-                        usdtFeeAmount = tx.fee
+                        usdtSellFeeAmount = tx.fee
                         console.log(`Sell USDT: Fee ${tx.fee} USDT charged separately`)
                     }
                 }
@@ -129,9 +129,9 @@ export async function recalculateFund(fundId: string) {
                 updateLocation('USDT', tx.fromLocation, -usdtSellAmount)
 
                 // 2a. Trừ phí USDT nếu có
-                if (usdtFeeAmount > 0) {
-                    sellUsdtState.amount -= usdtFeeAmount
-                    updateLocation('USDT', tx.fromLocation, -usdtFeeAmount)
+                if (usdtSellFeeAmount > 0) {
+                    sellUsdtState.amount -= usdtSellFeeAmount
+                    updateLocation('USDT', tx.fromLocation, -usdtSellFeeAmount)
                 }
 
                 // 3. Tăng VND (số thực tế nhận được)
