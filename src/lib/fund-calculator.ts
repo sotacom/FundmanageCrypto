@@ -59,20 +59,21 @@ export async function recalculateFund(fundId: string) {
         switch (tx.type) {
             case 'capital_in':
                 // Góp vốn
-                // Nếu là " initial" hoặc chưa có initialCapital => vốn ban đầu
-                if (tx.note?.includes('initial') || fund?.initialCapital === 0) {
-                    await db.fund.update({
-                        where: { id: fundId },
-                        data: { initialCapital: { increment: tx.amount } }
-                    })
-                    console.log(`Capital In (Initial): +${tx.amount} VND`)
+                // Track if this is the FIRST capital_in transaction we've seen
+                const existingCapitalIns = transactions.filter((t, idx) =>
+                    t.type === 'capital_in' && transactions.indexOf(tx) > idx
+                )
+
+                const isFirstCapitalIn = existingCapitalIns.length === 0
+
+                if (isFirstCapitalIn || tx.note?.includes('initial')) {
+                    // First capital_in = initial capital (don't increment, set directly)
+                    // But only update if we haven't processed this yet
+                    // We'll update equity at the end of recalculation instead
+                    console.log(`Capital In (Initial): ${tx.amount} VND`)
                 } else {
-                    // Vốn góp thêm
-                    await db.fund.update({
-                        where: { id: fundId },
-                        data: { additionalCapital: { increment: tx.amount } }
-                    })
-                    console.log(`Capital In (Additional): +${tx.amount} VND`)
+                    // Subsequent capital_in = additional capital
+                    console.log(`Capital In (Additional): ${tx.amount} VND`)
                 }
 
                 // Góp vốn: Tăng VND
@@ -83,11 +84,7 @@ export async function recalculateFund(fundId: string) {
                 break
 
             case 'capital_out':
-                // Rút vốn/lợi nhuận
-                await db.fund.update({
-                    where: { id: fundId },
-                    data: { withdrawnCapital: { increment: tx.amount } }
-                })
+                // Rút vốn/lợi nhuận (equity updated at end)
                 console.log(`Capital Out: -${tx.amount} VND`)
 
                 // Rút vốn: Giảm VND
@@ -304,23 +301,57 @@ export async function recalculateFund(fundId: string) {
 
     // Create new holdings
     for (const [asset, locs] of Object.entries(holdings)) {
-        for (const [location, amount] of Object.entries(locs)) {
-            // Skip if amount is negligible (floating point errors)
-            if (Math.abs(amount) < 0.00000001) continue
-
-            // Find avgPrice for this asset
-            const avgPrice = portfolio[asset]?.avgPrice || 0
-
-            await db.assetHolding.create({
-                data: {
+        // 5. Save all asset holdings and update fund equity
+        for (const [asset, state] of Object.entries(portfolio)) {
+            await db.assetHolding.upsert({
+                where: {
+                    fundId_asset: {
+                        fundId,
+                        asset
+                    }
+                },
+                update: {
+                    amount: state.amount,
+                    avgPrice: state.avgPrice
+                },
+                create: {
                     fundId,
                     asset,
-                    location: location === 'Unassigned' ? null : location,
-                    amount,
-                    avgPrice // Optional field in schema? Let's check. 
-                    // Schema has avgPrice Float? in AssetHolding.
+                    amount: state.amount,
+                    avgPrice: state.avgPrice,
+                    location: asset === 'VND' ? null : 'Binance'
                 }
             })
         }
+
+        // Calculate equity from capital_in and capital_out transactions
+        const capitalInTransactions = transactions.filter(tx => tx.type === 'capital_in')
+        const capitalOutTransactions = transactions.filter(tx => tx.type === 'capital_out')
+
+        const initialCapital = capitalInTransactions.length > 0 ? capitalInTransactions[0].amount : 0
+        const additionalCapital = capitalInTransactions.slice(1).reduce((sum, tx) => sum + tx.amount, 0)
+        const withdrawnCapital = capitalOutTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+        // Calculate total assets for retained earnings
+        const vndValue = portfolio['VND']?.amount || 0
+        const usdtValue = (portfolio['USDT']?.amount || 0) * (portfolio['USDT']?.avgPrice || 0)
+        const btcValueUsdt = (portfolio['BTC']?.amount || 0) * (portfolio['BTC']?.avgPrice || 0)
+        const btcValueVnd = btcValueUsdt * (portfolio['USDT']?.avgPrice || 0)
+        const totalAssets = vndValue + usdtValue + btcValueVnd
+
+        const totalCapital = initialCapital + additionalCapital - withdrawnCapital
+        const retainedEarnings = totalAssets - totalCapital
+
+        // Update fund equity
+        await db.fund.update({
+            where: { id: fundId },
+            data: {
+                initialCapital,
+                additionalCapital,
+                withdrawnCapital,
+                retainedEarnings
+            }
+        })
+
+        console.log(`✅ Recalculation complete - Initial: ${initialCapital}, Additional: ${additionalCapital}, Retained: ${retainedEarnings}`)
     }
-}
