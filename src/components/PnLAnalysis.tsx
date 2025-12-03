@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { TrendingUp, TrendingDown, Bitcoin, DollarSign, Globe, ArrowUpDown } from 'lucide-react'
+import { formatCurrency, formatNumber } from '@/lib/format'
 
 interface PnLAnalysisProps {
     fundId: string
@@ -53,18 +54,6 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
 
         fetchPnLData()
     }, [fundId])
-
-    const formatCurrency = (amount: number, currency: string) => {
-        if (currency === 'VND') {
-            return new Intl.NumberFormat('vi-VN', {
-                style: 'currency',
-                currency: 'VND'
-            }).format(amount).replace('₫', 'VND')
-        } else if (currency === 'USDT') {
-            return `${amount.toLocaleString()} USDT`
-        }
-        return amount.toLocaleString()
-    }
 
     // Calculate forex gain (USDT exchange rate difference)
     const forexGain = currentPrices

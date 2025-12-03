@@ -10,6 +10,7 @@ import { TransactionModal } from '@/components/TransactionForm'
 import TransactionHistory from '@/components/TransactionHistory'
 import FundSettings from '@/components/FundSettings'
 import PnLAnalysis from '@/components/PnLAnalysis'
+import { formatCurrency, formatNumber, formatPercentage } from '@/lib/format'
 
 interface FundData {
   id: string
@@ -206,23 +207,9 @@ export default function FundDashboard() {
     fetchFundData()
   }, [])
 
-  const formatCurrency = (amount: number, currency: string) => {
-    const formatter = new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: currency === 'VND' ? 'VND' : 'USD',
-      minimumFractionDigits: currency === 'BTC' ? 8 : 0,
-      maximumFractionDigits: currency === 'BTC' ? 8 : 0
-    })
-
-    if (currency === 'VND') {
-      return formatter.format(amount).replace('₫', 'VND')
-    } else if (currency === 'BTC') {
-      return `${amount.toFixed(8)} BTC`
-    } else {
-      return `$${amount.toLocaleString()} ${currency}`
-    }
+  const handleRefreshData = () => {
+    setRefreshTrigger(prev => prev + 1)
   }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -263,7 +250,7 @@ export default function FundDashboard() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">USDT/VND:</span>
                       <span className="text-sm font-semibold text-green-600">
-                        {currentPrices.usdtVnd.toLocaleString()}
+                        {formatNumber(currentPrices.usdtVnd, 0)}
                       </span>
                       <Badge
                         variant={currentPrices.sources.usdtVnd === 'binance_p2p' ? 'default' : 'secondary'}
@@ -275,7 +262,7 @@ export default function FundDashboard() {
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs text-muted-foreground">BTC/USDT:</span>
                       <span className="text-sm font-semibold text-orange-600">
-                        {currentPrices.btcUsdt.toLocaleString()}
+                        {formatNumber(currentPrices.btcUsdt, 2)}
                       </span>
                       <Badge
                         variant={currentPrices.sources.btcUsdt === 'binance_spot' ? 'default' : 'secondary'}
@@ -327,7 +314,7 @@ export default function FundDashboard() {
                 {formatCurrency(fundData.currentNav.vnd, 'VND')}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Vốn băn đầu: {fundData.equity.initialCapital.toLocaleString()} VND
+                Vốn băn đầu: {formatNumber(fundData.equity.initialCapital, 0)} VND
               </p>
             </CardContent>
           </Card>
