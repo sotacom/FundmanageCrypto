@@ -111,6 +111,88 @@
    npm run dev
    ```
 
+---
+
+## 🧪 Testing & Database Reset
+
+### Reset Database về 0
+
+Khi muốn test lại từ đầu với dữ liệu sạch:
+
+**Method 1: Sử dụng script (Khuyến nghị)**
+```bash
+npm run reset-db
+```
+
+**Method 2: Chạy lệnh trực tiếp**
+```bash
+# Xóa database và reset về trạng thái ban đầu
+npx prisma migrate reset --force
+```
+
+**Method 3: Xóa file database thủ công**
+```bash
+# Xóa database file
+rm -f prisma/dev.db prisma/dev.db-journal
+
+# Chạy lại migrations
+npx prisma migrate dev
+```
+
+### Sau khi reset:
+
+1. ✅ Database hoàn toàn sạch (0 transactions, 0 funds)
+2. ✅ Tất cả migrations đã apply
+3. ✅ Prisma Client đã regenerate
+4. ⚠️ Refresh browser để app tự tạo fund mới
+
+### Test Scenarios
+
+**Scenario 1: Test Equity Tracking**
+1. Reset database: `npm run reset-db`
+2. Góp vốn: 1,000,000,000 VND
+3. Mua USDT: 10,000 USDT @ 27,500 VND/USDT
+4. Mua BTC: 0.01 BTC @ 92,000 USDT/BTC
+5. ✅ Check: Vốn Chủ Sở Hữu vẫn là 1B (không tăng sau mua)
+6. ✅ Check: Lợi Nhuận hiển thị riêng
+7. ✅ Check: ROI tính đúng
+
+**Scenario 2: Test Fee Handling**
+1. Reset database
+2. Mua BTC với fee: 0.0001 BTC (fee trong BTC)
+3. ✅ Check: Giá TB phản ánh đúng fee (BTC received giảm)
+4. Bán BTC với fee: 10 USDT (fee trong USDT)
+5. ✅ Check: PnL tính đúng (USDT received giảm)
+
+**Scenario 3: Test Earn Interest Methods**
+1. Reset database
+2. Mua USDT, check giá TB
+3. Nhận Earn Interest
+4. ✅ Check method "Giảm giá TB": giá TB giảm
+5. Đổi sang method "Giữ nguyên giá TB" trong Settings
+6. ✅ Check: Giá TB không đổi khi nhận Earn tiếp
+
+**Scenario 4: Test Multiple Capital Contributions**
+1. Reset database
+2. Góp vốn initial: 1B
+3. Mua USDT, mua BTC
+4. Góp vốn additional: 500M
+5. ✅ Check: Initial Capital = 1B, Additional Capital = 500M
+6. Rút vốn: 200M
+7. ✅ Check: Withdrawn Capital = 200M, Total Capital = 1.3B
+
+---
+
+## 📚 Documentation
+
+Xem thêm tài liệu chi tiết:
+
+- **[HowItWork.md](./HowItWork.md)** - Giải thích chi tiết cách tính NAV, uPNL, và công thức
+- **[DeXuat.md](./DeXuat.md)** - Các đề xuất cải tiến và roadmap
+
+---
+
+## 🛠️ Tech Stack
 5. **Open browser**
    ```
    http://localhost:3000

@@ -1,17 +1,16 @@
-import { db } from '@/lib/db'
+import { db } from './db'
 
-interface AssetState {
+interface PortfolioState {
     amount: number
     avgPrice: number
 }
 
-interface LocationState {
-    [key: string]: number // location -> amount
+interface HoldingsByLocation {
+    [location: string]: number
 }
 
 export async function recalculateFund(fundId: string) {
-    // 1. Fetch fund settings to know earnInterestMethod
-    // Fetch fund with equity fields
+    // 1. Fetch fund with equity fields
     const fund = await db.fund.findUnique({
         where: { id: fundId },
         select: {
@@ -31,23 +30,22 @@ export async function recalculateFund(fundId: string) {
         orderBy: { createdAt: 'asc' }
     })
 
-    // 3. Initialize state
-    const portfolio: Record<string, AssetState> = {} // asset -> { amount, avgPrice }
-    const holdings: Record<string, LocationState> = {} // asset -> { location -> amount }
+    // 3. Initialize portfolio state
+    const portfolio: { [asset: string]: PortfolioState } = {}
+    const holdings: { [asset: string]: HoldingsByLocation } = {}
 
-    // Helper to get or init asset state
-    const getAssetState = (asset: string): AssetState => {
+    const getAssetState = (asset: string): PortfolioState => {
         if (!portfolio[asset]) {
             portfolio[asset] = { amount: 0, avgPrice: 0 }
         }
         return portfolio[asset]
     }
 
-    // Helper to update location holding
-    const updateLocation = (asset: string, location: string | null, change: number) => {
+    const updateLocation = (asset: string, location: string | null, delta: number) => {
+        const loc = location || 'Unassigned'
         if (!holdings[asset]) holdings[asset] = {}
-        const locKey = location || 'Unassigned'
-        holdings[asset][locKey] = (holdings[asset][locKey] || 0) + change
+        if (!holdings[asset][loc]) holdings[asset][loc] = 0
+        holdings[asset][loc] += delta
     }
 
     // 4. Process transactions
@@ -169,20 +167,27 @@ export async function recalculateFund(fundId: string) {
                 getAssetState('VND').amount += vndReceived
                 break
 
+            case 'transfer_usdt':
+                // Chuyển USDT giữa các địa điểm
+                const usdtTransferAmount = tx.amount
+                updateLocation('USDT', tx.fromLocation, -usdtTransferAmount)
+                updateLocation('USDT', tx.toLocation, usdtTransferAmount)
+                break
+
             case 'buy_btc':
                 // Mua BTC bằng USDT
                 const btcPurchaseAmount = tx.amount
                 const btcPrice = tx.price || 0
 
                 // ✨ Xử lý phí giao dịch
-                let btcReceived = btcPurchaseAmount
+                let btcBuyReceived = btcPurchaseAmount
                 let usdtSpent = btcPurchaseAmount * btcPrice
 
                 if (tx.fee && tx.fee > 0) {
                     if (tx.feeCurrency === 'BTC') {
-                        // Phí thu bằng BTC → giảm số BTC nhận được
-                        btcReceived = btcPurchaseAmount - tx.fee
-                        console.log(`Buy BTC: Fee ${tx.fee} BTC deducted from received amount`)
+                        // Phí thu bằng BTC → giảm BTC nhận được
+                        btcBuyReceived -= tx.fee
+                        console.log(`Buy BTC: Fee ${tx.fee} BTC deducted from received`)
                     } else if (tx.feeCurrency === 'USDT') {
                         // Phí thu bằng USDT → tăng USDT phải chi
                         usdtSpent += tx.fee
@@ -191,18 +196,19 @@ export async function recalculateFund(fundId: string) {
                 }
 
                 // 1. Giảm USDT
+                const usdtForBtc = getAssetState('USDT')
+                usdtForBtc.amount -= usdtSpent
                 updateLocation('USDT', tx.fromLocation, -usdtSpent)
-                getAssetState('USDT').amount -= usdtSpent
 
-                // 2. Tăng BTC với weighted average (dùng số thực tế nhận được)
+                // 2. Tăng BTC (dùng số thực tế nhận được)
                 const btcState = getAssetState('BTC')
                 const totalBtcCost = (btcState.amount * btcState.avgPrice) + usdtSpent
-                const totalBtcAmount = btcState.amount + btcReceived
+                const totalBtcAmount = btcState.amount + btcBuyReceived
 
                 btcState.avgPrice = totalBtcCost / totalBtcAmount
                 btcState.amount = totalBtcAmount
 
-                updateLocation('BTC', tx.toLocation, btcReceived)
+                updateLocation('BTC', tx.toLocation, btcBuyReceived)
                 break
 
             case 'sell_btc':
@@ -226,7 +232,7 @@ export async function recalculateFund(fundId: string) {
                     }
                 }
 
-                // 1. Tính realized PnL (dùng USDT thực tế nhận được)
+                // 1. Tính realized PnL
                 const sellBtcState = getAssetState('BTC')
                 costBasis = sellBtcState.avgPrice
                 realizedPnL = usdtReceived - (btcSellAmount * costBasis)
@@ -242,57 +248,60 @@ export async function recalculateFund(fundId: string) {
                 }
 
                 // 3. Tăng USDT (số thực tế nhận được)
-                updateLocation('USDT', tx.toLocation, usdtReceived)
-                getAssetState('USDT').amount += usdtReceived
-                break
+                const usdtFromBtc = getAssetState('USDT')
+                const prevUsdtCost = usdtFromBtc.amount * usdtFromBtc.avgPrice
+                const newUsdtCost = prevUsdtCost + (usdtReceived * usdtFromBtc.avgPrice)
+                const newUsdtAmount = usdtFromBtc.amount + usdtReceived
 
-            case 'transfer_usdt':
-                updateLocation('USDT', tx.fromLocation, -tx.amount)
-                updateLocation('USDT', tx.toLocation, tx.amount)
+                usdtFromBtc.avgPrice = newUsdtCost / newUsdtAmount
+                usdtFromBtc.amount = newUsdtAmount
+
+                updateLocation('USDT', tx.toLocation, usdtReceived)
                 break
 
             case 'transfer_btc':
-                updateLocation('BTC', tx.fromLocation, -tx.amount)
-                updateLocation('BTC', tx.toLocation, tx.amount)
+                // Chuyển BTC giữa các địa điểm
+                const btcTransferAmount = tx.amount
+                updateLocation('BTC', tx.fromLocation, -btcTransferAmount)
+                updateLocation('BTC', tx.toLocation, btcTransferAmount)
                 break
 
             case 'earn_interest':
                 // Lãi suất USDT: 2 cách tính
                 const earnState = getAssetState('USDT')
 
-                const earnMethod = fund?.earnInterestMethod || 'reduce_avg_price';
+                const earnMethod = fund?.earnInterestMethod || 'reduce_avg_price'
                 if (earnMethod === 'keep_avg_price') {
                     // ✨ CÁCH 2: Giữ nguyên giá TB
                     // Không thay đổi avgPrice, chỉ tăng amount
                     earnState.amount += tx.amount
-                    console.log(`Earn ${tx.amount} USDT - kept avg price at ${earnState.avgPrice}`)
-
+                    console.log(`Earn Interest (Keep Avg Price): +${tx.amount} USDT, avgPrice unchanged at ${earnState.avgPrice}`)
                 } else {
-                    // CÁCH 1: Giảm giá TB (mặc định)
-                    // Coi như mua USDT với giá 0
-                    const earnCost = (earnState.amount * earnState.avgPrice) + (tx.amount * 0)
-                    const earnAmount = earnState.amount + tx.amount
-
-                    earnState.avgPrice = earnCost / earnAmount
-                    earnState.amount = earnAmount
-                    console.log(`Earn ${tx.amount} USDT - new avg price: ${earnState.avgPrice}`)
+                    // ✨ CÁCH 1: Giảm giá TB (default)
+                    // Tăng amount nhưng không tăng cost → giảm avgPrice
+                    const prevCost = earnState.amount * earnState.avgPrice
+                    const newAmount = earnState.amount + tx.amount
+                    earnState.avgPrice = prevCost / newAmount
+                    earnState.amount = newAmount
+                    console.log(`Earn Interest (Reduce Avg Price): +${tx.amount} USDT, new avgPrice: ${earnState.avgPrice}`)
                 }
 
-                updateLocation('USDT', tx.toLocation || tx.fromLocation, tx.amount)
+                updateLocation('USDT', tx.toLocation, tx.amount)
                 break
+
+            default:
+                console.warn(`Unknown transaction type: ${tx.type}`)
         }
 
-        // Update transaction with calculated metrics
+        // Save calculated fields back to transaction
         await db.transaction.update({
             where: { id: tx.id },
             data: {
-                costBasis: costBasis > 0 ? costBasis : null,
-                realizedPnL: realizedPnL !== 0 ? realizedPnL : null
+                costBasis,
+                realizedPnL
             }
         })
     }
-
-    // 4. Update Database State
 
     // Clear old holdings
     await db.assetHolding.deleteMany({
@@ -344,3 +353,4 @@ export async function recalculateFund(fundId: string) {
     })
 
     console.log(`✅ Recalculation complete - Initial: ${initialCapital}, Additional: ${additionalCapital}, Retained: ${retainedEarnings}`)
+}
