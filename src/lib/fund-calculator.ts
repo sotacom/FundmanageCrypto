@@ -299,22 +299,11 @@ export async function recalculateFund(fundId: string) {
         where: { fundId }
     })
 
-    // Create new holdings
-    for (const [asset, locs] of Object.entries(holdings)) {
-        // 5. Save all asset holdings and update fund equity
-        for (const [asset, state] of Object.entries(portfolio)) {
-            await db.assetHolding.upsert({
-                where: {
-                    fundId_asset: {
-                        fundId,
-                        asset
-                    }
-                },
-                update: {
-                    amount: state.amount,
-                    avgPrice: state.avgPrice
-                },
-                create: {
+    // Create new holdings from calculated portfolio
+    for (const [asset, state] of Object.entries(portfolio)) {
+        if (state.amount > 0.00000001) { // Skip negligible amounts
+            await db.assetHolding.create({
+                data: {
                     fundId,
                     asset,
                     amount: state.amount,
@@ -323,35 +312,35 @@ export async function recalculateFund(fundId: string) {
                 }
             })
         }
-
-        // Calculate equity from capital_in and capital_out transactions
-        const capitalInTransactions = transactions.filter(tx => tx.type === 'capital_in')
-        const capitalOutTransactions = transactions.filter(tx => tx.type === 'capital_out')
-
-        const initialCapital = capitalInTransactions.length > 0 ? capitalInTransactions[0].amount : 0
-        const additionalCapital = capitalInTransactions.slice(1).reduce((sum, tx) => sum + tx.amount, 0)
-        const withdrawnCapital = capitalOutTransactions.reduce((sum, tx) => sum + tx.amount, 0)
-
-        // Calculate total assets for retained earnings
-        const vndValue = portfolio['VND']?.amount || 0
-        const usdtValue = (portfolio['USDT']?.amount || 0) * (portfolio['USDT']?.avgPrice || 0)
-        const btcValueUsdt = (portfolio['BTC']?.amount || 0) * (portfolio['BTC']?.avgPrice || 0)
-        const btcValueVnd = btcValueUsdt * (portfolio['USDT']?.avgPrice || 0)
-        const totalAssets = vndValue + usdtValue + btcValueVnd
-
-        const totalCapital = initialCapital + additionalCapital - withdrawnCapital
-        const retainedEarnings = totalAssets - totalCapital
-
-        // Update fund equity
-        await db.fund.update({
-            where: { id: fundId },
-            data: {
-                initialCapital,
-                additionalCapital,
-                withdrawnCapital,
-                retainedEarnings
-            }
-        })
-
-        console.log(`✅ Recalculation complete - Initial: ${initialCapital}, Additional: ${additionalCapital}, Retained: ${retainedEarnings}`)
     }
+
+    // Calculate equity from capital_in and capital_out transactions
+    const capitalInTransactions = transactions.filter(tx => tx.type === 'capital_in')
+    const capitalOutTransactions = transactions.filter(tx => tx.type === 'capital_out')
+
+    const initialCapital = capitalInTransactions.length > 0 ? capitalInTransactions[0].amount : 0
+    const additionalCapital = capitalInTransactions.slice(1).reduce((sum, tx) => sum + tx.amount, 0)
+    const withdrawnCapital = capitalOutTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+    // Calculate total assets for retained earnings
+    const vndValue = portfolio['VND']?.amount || 0
+    const usdtValue = (portfolio['USDT']?.amount || 0) * (portfolio['USDT']?.avgPrice || 0)
+    const btcValueUsdt = (portfolio['BTC']?.amount || 0) * (portfolio['BTC']?.avgPrice || 0)
+    const btcValueVnd = btcValueUsdt * (portfolio['USDT']?.avgPrice || 0)
+    const totalAssets = vndValue + usdtValue + btcValueVnd
+
+    const totalCapital = initialCapital + additionalCapital - withdrawnCapital
+    const retainedEarnings = totalAssets - totalCapital
+
+    // Update fund equity
+    await db.fund.update({
+        where: { id: fundId },
+        data: {
+            initialCapital,
+            additionalCapital,
+            withdrawnCapital,
+            retainedEarnings
+        }
+    })
+
+    console.log(`✅ Recalculation complete - Initial: ${initialCapital}, Additional: ${additionalCapital}, Retained: ${retainedEarnings}`)
