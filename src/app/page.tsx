@@ -648,8 +648,12 @@ export default function FundDashboard() {
             </div>
           </TabsContent>
 
-          <TabsContent value="transactions" className="space-y-4">
-            <TransactionHistory fundId={fundData.id} />
+          {/* Transaction History Tab */}
+          <TabsContent value="history" className="space-y-4">
+            <TransactionHistory
+              fundId={fundData.id}
+              refreshTrigger={refreshTrigger}
+            />
           </TabsContent>
 
           {/* Settings Tab */}
