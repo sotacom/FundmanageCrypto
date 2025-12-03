@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Plus, TrendingUp, TrendingDown, Wallet, DollarSign, Bitcoin } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, Wallet, DollarSign, Bitcoin, RefreshCw } from 'lucide-react'
 import { TransactionModal } from '@/components/TransactionForm'
 import TransactionHistory from '@/components/TransactionHistory'
 
@@ -47,10 +47,44 @@ interface FundData {
   }
 }
 
+interface CurrentPrices {
+  usdtVnd: number
+  btcUsdt: number
+  timestamp: Date
+  sources: {
+    usdtVnd: 'binance_p2p' | 'default'
+    btcUsdt: 'binance_spot' | 'default'
+  }
+}
+
 export default function FundDashboard() {
   const [fundData, setFundData] = useState<FundData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [currentPrices, setCurrentPrices] = useState<CurrentPrices | null>(null)
+  const [pricesLoading, setPricesLoading] = useState(false)
+
+  // Fetch current prices
+  const fetchCurrentPrices = async () => {
+    setPricesLoading(true)
+    try {
+      const response = await fetch('/api/prices/current')
+      const data = await response.json()
+      setCurrentPrices({
+        ...data,
+        timestamp: new Date(data.timestamp)
+      })
+    } catch (error) {
+      console.error('Error fetching prices:', error)
+    } finally {
+      setPricesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    // Fetch prices on mount
+    fetchCurrentPrices()
+  }, [])
 
   useEffect(() => {
     const fetchFundData = async () => {
@@ -62,8 +96,8 @@ export default function FundDashboard() {
         if (initData.success) {
           const fundId = initData.fundId
 
-          // Fetch NAV data
-          const navResponse = await fetch(`/api/nav?fundId=${fundId}&usdtVndPrice=25500&btcUsdtPrice=43000`)
+          // Fetch NAV data - API will fetch live prices from Binance automatically
+          const navResponse = await fetch(`/api/nav?fundId=${fundId}`)
 
           if (navResponse.ok) {
             const navData = await navResponse.json()
@@ -190,9 +224,64 @@ export default function FundDashboard() {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{fundData.name}</h1>
-              <p className="text-sm text-gray-500">Quản lý quỹ đầu tư cá nhân</p>
+              <p className="text-sm text-muted-foreground">Quản lý quỹ đầu tư cá nhân</p>
             </div>
-            <TransactionModal fundId={fundData?.id} />
+
+            {/* Price Display */}
+            <div className="flex items-center gap-4">
+              {currentPrices && (
+                <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">USDT/VND:</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        {currentPrices.usdtVnd.toLocaleString()}
+                      </span>
+                      <Badge
+                        variant={currentPrices.sources.usdtVnd === 'binance_p2p' ? 'default' : 'secondary'}
+                        className="text-xs h-5"
+                      >
+                        {currentPrices.sources.usdtVnd === 'binance_p2p' ? '🟢 Live' : '⚪ Default'}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted-foreground">BTC/USDT:</span>
+                      <span className="text-sm font-semibold text-orange-600">
+                        {currentPrices.btcUsdt.toLocaleString()}
+                      </span>
+                      <Badge
+                        variant={currentPrices.sources.btcUsdt === 'binance_spot' ? 'default' : 'secondary'}
+                        className="text-xs h-5"
+                      >
+                        {currentPrices.sources.btcUsdt === 'binance_spot' ? '🟢 Live' : '⚪ Default'}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="border-l pl-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={fetchCurrentPrices}
+                      disabled={pricesLoading}
+                      className="h-8"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${pricesLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    {currentPrices.timestamp && (
+                      <p className="text-xs text-muted-foreground mt-1 text-center">
+                        {new Date(currentPrices.timestamp).toLocaleTimeString('vi-VN', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <TransactionModal fundId={fundData?.id} />
+            </div>
           </div>
         </div>
       </header>

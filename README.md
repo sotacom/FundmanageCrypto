@@ -9,6 +9,7 @@
 - **uPNL (Unrealized Profit/Loss)**: Lãi/lỗ chưa hiện thực với phần trăm
 - **PnL (Realized Profit/Loss)**: Lãi/lỗ đã hiện thực
 - **Tổng Lãi/Lỗ**: Tổng lợi nhuận từ khi bắt đầu
+- **🟢 Live Prices**: Giá real-time từ Binance P2P (USDT/VND) và Spot (BTC/USDT) với nút refresh thủ công
 
 ### 💰 Quản Lý Tài Sản
 - **VND**: Tiền mặt Việt Nam Đồng
@@ -42,6 +43,17 @@
   - BTC/USDT cho BTC
 - **Quản lý phí giao dịch**: Theo dõi phí mua/bán BTC
 - **Lãi/lỗ 2 loại**: Chưa hiện thực và đã hiện thực
+
+### 💱 Live Price Fetching
+- **Binance P2P API**: Lấy giá USDT/VND từ thị trường P2P
+  - Fetch top 12 advertisers
+  - Loại bỏ 2 ads đầu (tránh scam/outliers)
+  - Tính trung bình 10 ads còn lại
+- **Binance Spot API**: Lấy giá BTC/USDT từ spot market
+- **Auto-refresh**: Tự động lấy giá khi load trang
+- **Manual refresh**: Nút refresh để cập nhật giá thủ công
+- **Fallback mechanism**: Tự động dùng giá mặc định nếu API fail
+- **Visual indicators**: Badge hiển thị "🟢 Live" hoặc "⚪ Default"
 
 ## 🛠 Công Nghệ
 
@@ -107,12 +119,13 @@
 ## 📱 Giao Diện
 
 ### Main Dashboard
-- Cards hiển thị NAV, uPNL, PnL
-- Tabs chi tiết:
-  - **Sở hữu tài sản**: Phân bổ theo loại tài sản
-  - **Phân tích NAV**: 2 phương pháp tính NAV
-  - **Giá trung bình**: Giá mua TB USDT/VND, BTC/USDT
-  - **Lịch sử giao dịch**: Danh sách giao dịch gần đây
+- **Header**: Hiển thị giá live USDT/VND và BTC/USDT với timestamp và nút refresh
+- **Cards**: NAV, uPNL, PnL với màu sắc trực quan
+- **Tabs chi tiết**:
+  - **Sở hữu tài sản**: Phân bổ theo loại tài sản với tỷ trọng
+  - **Phân tích NAV**: 2 phương pháp tính NAV (VND và USDT)
+  - **Giá trung bình**: Giá mua TB USDT/VND, BTC/USDT theo weighted average
+  - **Lịch sử giao dịch**: Danh sách giao dịch gần đây với filter và edit
 
 ### Transaction Form
 - Modal tạo giao dịch mới
@@ -147,20 +160,29 @@ uPNL = NAV_hiện_tại - Vốn_ban_đầu
 
 ## 🔧 API Endpoints
 
+### Core APIs
 - `GET/POST /api/funds` - Quản lý quỹ
-- `GET/POST /api/transactions` - Giao dịch
-- `GET/POST /api/nav` - Tính NAV & PnL
-- `GET/POST /api/avg-price` - Giá mua TB
+- `GET/POST /api/transactions` - Giao dịch (CRUD)
+- `GET/POST /api/nav` - Tính NAV & PnL (auto-fetch live prices)
+- `GET/POST /api/avg-price` - Giá mua trung bình
 - `POST /api/init` - Khởi tạo data demo
+
+### Price APIs
+- `GET /api/prices/current` - Lấy giá live từ Binance
+  - Response: `{ usdtVnd, btcUsdt, timestamp, sources }`
+  - Sources: `binance_p2p` | `binance_spot` | `default`
 
 ## 🎯 Tương Lai
 
-- [ ] Real-time price updates từ Binance API
+- [x] ✅ Real-time price updates từ Binance API
+- [ ] Price caching (5-minute TTL)
+- [ ] Auto-refresh prices mỗi 30s
 - [ ] Charts & Analytics
 - [ ] Export reports (Excel, PDF)
 - [ ] Multi-user support
 - [ ] Mobile app
 - [ ] Advanced tax calculations
+- [ ] Báo cáo kế toán theo chuẩn VN
 
 ## 📝 License
 

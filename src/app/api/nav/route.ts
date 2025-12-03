@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentPrices } from '@/lib/binance-price-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,9 +41,15 @@ export async function POST(request: NextRequest) {
     const usdtBalance = holdings['USDT'] || 0
     const btcBalance = holdings['BTC'] || 0
 
-    // Giá hiện tại (mặc định nếu không cung cấp)
-    const usdtVndPrice = currentPrices?.usdtVnd || 25500
-    const btcUsdtPrice = currentPrices?.btcUsdt || 43000
+    // Lấy giá hiện tại - ưu tiên từ params, nếu không có thì fetch từ Binance
+    let usdtVndPrice = currentPrices?.usdtVnd
+    let btcUsdtPrice = currentPrices?.btcUsdt
+
+    if (!usdtVndPrice || !btcUsdtPrice) {
+      const livePrices = await getCurrentPrices()
+      usdtVndPrice = usdtVndPrice || livePrices.usdtVnd
+      btcUsdtPrice = btcUsdtPrice || livePrices.btcUsdt
+    }
 
     // Tính NAV theo VND
     const navVnd = vndCash + (usdtBalance * usdtVndPrice) + (btcBalance * btcUsdtPrice * usdtVndPrice)
