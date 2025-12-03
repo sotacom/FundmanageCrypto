@@ -117,9 +117,16 @@ export default function FundDashboard() {
             const transformedData: FundData = {
               id: navData.fund.id,
               name: navData.fund.name,
-              initialVnd: navData.fund.initialVnd,
+              initialVnd: navData.fund.initialVnd || 0,
               earnInterestMethod: navData.fund.earnInterestMethod || 'reduce_avg_price',
-              equity: navData.equity, // Assuming equity comes directly from API
+              equity: navData.fund.equity || {
+                initialCapital: 0,
+                additionalCapital: 0,
+                withdrawnCapital: 0,
+                totalCapital: 0,
+                retainedEarnings: 0,
+                totalEquity: 0
+              },
               currentNav: {
                 vnd: navData.currentNav.vnd,
                 usdt: navData.currentNav.usdt
