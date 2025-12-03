@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Plus, TrendingUp, TrendingDown, Wallet, DollarSign, Bitcoin, RefreshCw } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, Wallet, DollarSign, Bitcoin, RefreshCw, ArrowUpDown } from 'lucide-react'
 import { TransactionModal } from '@/components/TransactionForm'
 import TransactionHistory from '@/components/TransactionHistory'
 import FundSettings from '@/components/FundSettings'
@@ -16,6 +16,14 @@ interface FundData {
   name: string
   initialVnd: number
   earnInterestMethod?: 'reduce_avg_price' | 'keep_avg_price' // Settings
+  equity: {
+    initialCapital: number
+    additionalCapital: number
+    withdrawnCapital: number
+    totalCapital: number
+    retainedEarnings: number
+    totalEquity: number
+  }
   currentNav: {
     vnd: number
     usdt: number
@@ -111,6 +119,7 @@ export default function FundDashboard() {
               name: navData.fund.name,
               initialVnd: navData.fund.initialVnd,
               earnInterestMethod: navData.fund.earnInterestMethod || 'reduce_avg_price',
+              equity: navData.equity, // Assuming equity comes directly from API
               currentNav: {
                 vnd: navData.currentNav.vnd,
                 usdt: navData.currentNav.usdt
@@ -140,6 +149,14 @@ export default function FundDashboard() {
           id: '1',
           name: 'Quỹ Đầu Tư Cá Nhân',
           initialVnd: 100000000,
+          equity: {
+            initialCapital: 100000000,
+            additionalCapital: 0,
+            withdrawnCapital: 0,
+            totalCapital: 100000000,
+            retainedEarnings: 25000000,
+            totalEquity: 125000000,
+          },
           currentNav: {
             vnd: 125000000,
             usdt: 5000
@@ -291,64 +308,71 @@ export default function FundDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Main Overview Cards */}
+        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tổng NAV (VND)</CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(fundData.currentNav.vnd, 'VND')}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Vốn ban đầu: {formatCurrency(fundData.initialVnd, 'VND')}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lãi/Lỗ Chưa Hiện Thực</CardTitle>
+              <CardTitle className="text-sm font-medium">Tổng NAV</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${fundData.unrealizedPnL.vnd >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {fundData.unrealizedPnL.vnd >= 0 ? '+' : ''}{formatCurrency(fundData.unrealizedPnL.vnd, 'VND')}
+              <div className="text-2xl font-bold">
+                {formatCurrency(fundData.currentNav.vnd, 'VND')}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {fundData.unrealizedPnL.percentage >= 0 ? '+' : ''}{fundData.unrealizedPnL.percentage.toFixed(2)}%
+              <p className="text-xs text-muted-foreground mt-1">
+                Vốn băn đầu: {fundData.equity.initialCapital.toLocaleString()} VND
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lãi/Lỗ Đã Hiện Thực</CardTitle>
+              <CardTitle className="text-sm font-medium">Vốn Chủ Sở Hữu</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${fundData.realizedPnL.vnd >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {fundData.realizedPnL.vnd >= 0 ? '+' : ''}{formatCurrency(fundData.realizedPnL.vnd, 'VND')}
+              <div className="text-2xl font-bold">
+                {formatCurrency(fundData.equity.totalCapital, 'VND')}
               </div>
-              <p className="text-xs text-muted-foreground">
-                USDT: {fundData.realizedPnL.usdt >= 0 ? '+' : ''}{fundData.realizedPnL.usdt.toLocaleString()} USDT
+              <p className="text-xs text-muted-foreground mt-1">
+                {fundData.equity.withdrawnCapital > 0 && `Đã rút: ${formatCurrency(fundData.equity.withdrawnCapital, 'VND')}`}
+                {fundData.equity.withdrawnCapital === 0 && 'Chưa rút vốn'}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tổng Lãi/Lỗ</CardTitle>
-              <Bitcoin className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Lợi Nhuận</CardTitle>
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${(fundData.unrealizedPnL.vnd + fundData.realizedPnL.vnd) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {(fundData.unrealizedPnL.vnd + fundData.realizedPnL.vnd) >= 0 ? '+' : ''}{formatCurrency(fundData.unrealizedPnL.vnd + fundData.realizedPnL.vnd, 'VND')}
+              <div className={`text-2xl font-bold ${fundData.equity.retainedEarnings >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                {fundData.equity.retainedEarnings >= 0 ? '+' : ''}
+                {formatCurrency(fundData.equity.retainedEarnings, 'VND')}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Tổng lợi nhuận từ khi bắt đầu
+              <p className="text-xs text-muted-foreground mt-1">
+                Lợi nhuận chưa phân phối
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">ROI</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${fundData.equity.retainedEarnings >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                {fundData.equity.totalCapital > 0
+                  ? `${((fundData.equity.retainedEarnings / fundData.equity.totalCapital) * 100).toFixed(2)}%`
+                  : '0%'
+                }
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Lợi nhuận / Vốn
               </p>
             </CardContent>
           </Card>

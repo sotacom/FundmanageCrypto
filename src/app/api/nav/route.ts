@@ -72,8 +72,16 @@ export async function POST(request: NextRequest) {
       fund: {
         id: fund.id,
         name: fund.name,
-        initialVnd: fund.initialVnd,
-        earnInterestMethod: fund.earnInterestMethod // ✨ Include settings
+        earnInterestMethod: fund.earnInterestMethod,
+        // Equity breakdown
+        equity: {
+          initialCapital: fund.initialCapital,
+          additionalCapital: fund.additionalCapital,
+          withdrawnCapital: fund.withdrawnCapital,
+          totalCapital: fund.initialCapital + fund.additionalCapital - fund.withdrawnCapital,
+          retainedEarnings: fund.retainedEarnings,
+          totalEquity: fund.initialCapital + fund.additionalCapital - fund.withdrawnCapital + fund.retainedEarnings
+        }
       },
       holdings: {
         vnd: vndCash,
