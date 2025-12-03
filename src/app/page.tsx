@@ -415,7 +415,7 @@ export default function FundDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-green-600">
-                    {fundData.holdings.usdt.toLocaleString()} USDT
+                    {formatNumber(fundData.holdings.usdt, 2)} USDT
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
                     {formatCurrency(fundData.holdings.usdt * fundData.avgPrices.usdt.avgPrice, 'VND')}
@@ -473,13 +473,13 @@ export default function FundDashboard() {
                     <span className="font-medium">{formatCurrency(fundData.holdings.vnd, 'VND')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>USDT (tỷ giá {fundData.avgPrices.usdt.avgPrice.toLocaleString()}):</span>
+                    <span>USDT (tỷ giá {formatNumber(fundData.avgPrices.usdt.avgPrice, 0)}):</span>
                     <span className="font-medium">
                       {formatCurrency(fundData.holdings.usdt * fundData.avgPrices.usdt.avgPrice, 'VND')}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>BTC ({fundData.avgPrices.btc.avgPrice.toLocaleString()} USDT):</span>
+                    <span>BTC ({formatNumber(fundData.avgPrices.btc.avgPrice, 2)} USDT):</span>
                     <span className="font-medium">
                       {formatCurrency(fundData.holdings.btc * fundData.avgPrices.btc.avgPrice * fundData.avgPrices.usdt.avgPrice, 'VND')}
                     </span>
@@ -509,18 +509,18 @@ export default function FundDashboard() {
                   </div>
                   <div className="flex justify-between">
                     <span>USDT:</span>
-                    <span className="font-medium">{fundData.holdings.usdt.toLocaleString()} USDT</span>
+                    <span className="font-medium">{formatNumber(fundData.holdings.usdt, 2)} USDT</span>
                   </div>
                   <div className="flex justify-between">
                     <span>BTC:</span>
                     <span className="font-medium">
-                      {(fundData.holdings.btc * fundData.avgPrices.btc.avgPrice).toLocaleString()} USDT
+                      {formatNumber(fundData.holdings.btc * fundData.avgPrices.btc.avgPrice, 2)} USDT
                     </span>
                   </div>
                   <div className="pt-2 border-t">
                     <div className="flex justify-between text-lg font-bold">
                       <span>Tổng NAV:</span>
-                      <span className="text-green-600">{fundData.currentNav.usdt.toLocaleString()} USDT</span>
+                      <span className="text-green-600">{formatNumber(fundData.currentNav.usdt, 2)} USDT</span>
                     </div>
                   </div>
                 </CardContent>
@@ -548,7 +548,7 @@ export default function FundDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-blue-600">
-                    {fundData.avgPrices.usdt.avgPrice.toLocaleString()} VND/USDT
+                    {formatNumber(fundData.avgPrices.usdt.avgPrice, 0)} VND/USDT
                   </div>
 
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -563,7 +563,7 @@ export default function FundDashboard() {
                   <div className="mt-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng USDT đã mua:</span>
-                      <span className="font-medium">{fundData.avgPrices.usdt.totalBought.toLocaleString()} USDT</span>
+                      <span className="font-medium">{formatNumber(fundData.avgPrices.usdt.totalBought, 2)} USDT</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng VND đã chi:</span>
@@ -572,7 +572,7 @@ export default function FundDashboard() {
                     <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">USDT từ Earn:</span>
                       <span className="font-semibold text-green-600">
-                        +{fundData.avgPrices.usdt.totalEarn.toLocaleString()} USDT
+                        +{formatNumber(fundData.avgPrices.usdt.totalEarn, 2)} USDT
                       </span>
                     </div>
                     {fundData.avgPrices.usdt.totalEarn > 0 && (
@@ -586,7 +586,7 @@ export default function FundDashboard() {
                     <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">Giá P2P hiện tại:</span>
                       <span className="font-medium text-green-600">
-                        {currentPrices?.usdtVnd.toLocaleString() || 'N/A'} VND
+                        {formatNumber(currentPrices?.usdtVnd || 0, 0) || 'N/A'} VND
                       </span>
                     </div>
                   </div>
@@ -602,7 +602,7 @@ export default function FundDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-orange-600">
-                    {fundData.avgPrices.btc.avgPrice.toLocaleString()} USDT/BTC
+                    {formatNumber(fundData.avgPrices.btc.avgPrice, 2)} USDT/BTC
                   </div>
                   <div className="mt-4 space-y-2">
                     <div className="flex justify-between text-sm">
@@ -611,12 +611,12 @@ export default function FundDashboard() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng USDT đã chi:</span>
-                      <span className="font-medium">{fundData.avgPrices.btc.totalSpent.toLocaleString()} USDT</span>
+                      <span className="font-medium">{formatNumber(fundData.avgPrices.btc.totalSpent, 2)} USDT</span>
                     </div>
                     <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">Giá Spot hiện tại:</span>
                       <span className="font-medium text-orange-600">
-                        {currentPrices?.btcUsdt.toLocaleString() || 'N/A'} USDT
+                        {formatNumber(currentPrices?.btcUsdt || 0, 2) || 'N/A'} USDT
                       </span>
                     </div>
                     {currentPrices && fundData.avgPrices.btc.avgPrice > 0 && (
