@@ -232,9 +232,10 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
                         </p>
                       )}
                       {transaction.fee && transaction.fee > 0 && (
-                        <p className="text-sm text-orange-600">
-                          Phí: {formatCurrency(transaction.fee, transaction.feeCurrency || transaction.currency)}
-                        </p>
+                        <div className="flex items-center gap-1 text-xs text-orange-600 mt-1">
+                          <span>💳</span>
+                          <span>Phí: {formatCurrency(transaction.fee, transaction.feeCurrency || transaction.currency)}</span>
+                        </div>
                       )}
                     </div>
                     <Button
