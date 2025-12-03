@@ -57,9 +57,9 @@ export async function POST(request: NextRequest) {
     // Tính PnL đã hiện thực
     const realizedPnL = await calculateRealizedPnL(fundId)
 
-    // Lấy giá mua trung bình
-    const avgUsdtPrice = await getAveragePrice(fundId, 'USDT')
-    const avgBtcPrice = await getAveragePrice(fundId, 'BTC')
+    // Lấy thông tin metrics
+    const usdtMetrics = await getAssetMetrics(fundId, 'USDT')
+    const btcMetrics = await getAssetMetrics(fundId, 'BTC')
 
     return NextResponse.json({
       fund: {
@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
       },
       realizedPnL,
       avgPrices: {
-        usdtPerVnd: avgUsdtPrice,
-        btcPerUsdt: avgBtcPrice
+        usdt: usdtMetrics,
+        btc: btcMetrics
       },
       currentPrices: {
         usdtVnd: usdtVndPrice,
@@ -151,7 +151,8 @@ async function calculateRealizedPnL(fundId: string) {
   }
 }
 
-async function getAveragePrice(fundId: string, asset: string): Promise<number> {
+async function getAssetMetrics(fundId: string, asset: string) {
+  // Get buy transactions
   const buyTransactions = await db.transaction.findMany({
     where: {
       fundId,
@@ -162,15 +163,34 @@ async function getAveragePrice(fundId: string, asset: string): Promise<number> {
     }
   })
 
-  if (buyTransactions.length === 0) return 0
+  // Get earn interest transactions (only for USDT currently)
+  const earnTransactions = await db.transaction.findMany({
+    where: {
+      fundId,
+      type: 'earn_interest',
+      currency: asset
+    }
+  })
 
   let totalAmount = 0
   let totalCost = 0
+  let totalEarn = 0
 
   for (const transaction of buyTransactions) {
     totalAmount += transaction.amount
     totalCost += transaction.amount * (transaction.price || 0)
   }
 
-  return totalAmount > 0 ? totalCost / totalAmount : 0
+  for (const transaction of earnTransactions) {
+    totalEarn += transaction.amount
+  }
+
+  const avgPrice = totalAmount > 0 ? totalCost / totalAmount : 0
+
+  return {
+    avgPrice,
+    totalBought: totalAmount,
+    totalSpent: totalCost,
+    totalEarn
+  }
 }
