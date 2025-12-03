@@ -5,7 +5,7 @@ export async function POST() {
   try {
     // Check if fund already exists
     const existingFund = await db.fund.findFirst()
-    
+
     if (existingFund) {
       return NextResponse.json({
         success: true,
@@ -15,17 +15,18 @@ export async function POST() {
       })
     }
 
-    // Tạo quỹ mẫu
+    // Tạo quỹ mẫu (Empty)
     const fund = await db.fund.create({
       data: {
         name: 'Quỹ Đầu Tư Cá Nhân',
-        description: 'Quỹ đầu tư cá nhân demo',
-        initialVnd: 100000000 // 100 triệu VND
+        description: 'Quỹ đầu tư cá nhân',
+        initialVnd: 0
       }
     })
 
-    // Tạo các tài khoản
-    const binanceAccount = await db.account.create({
+    // Tạo các tài khoản mặc định (Empty)
+    // We can keep these or remove them. Let's keep them as basic setup but without balances.
+    await db.account.create({
       data: {
         fundId: fund.id,
         name: 'Binance Spot',
@@ -35,7 +36,7 @@ export async function POST() {
       }
     })
 
-    const earnAccount = await db.account.create({
+    await db.account.create({
       data: {
         fundId: fund.id,
         name: 'Binance Earn',
@@ -45,7 +46,7 @@ export async function POST() {
       }
     })
 
-    const coldWallet = await db.account.create({
+    await db.account.create({
       data: {
         fundId: fund.id,
         name: 'Ví lạnh 1',
@@ -55,114 +56,9 @@ export async function POST() {
       }
     })
 
-    // Tạo các holding ban đầu
-    await db.assetHolding.create({
-      data: {
-        fundId: fund.id,
-        asset: 'VND',
-        amount: 100000000 // Vốn ban đầu
-      }
-    })
-
-    // Ghi nhận giao dịch góp vốn ban đầu
-    await db.transaction.create({
-      data: {
-        fundId: fund.id,
-        type: 'capital_in',
-        amount: 100000000,
-        currency: 'VND',
-        note: 'Vốn ban đầu khi tạo quỹ'
-      }
-    })
-
-    // Tạo các giao dịch mẫu
-    const transactions = [
-      // Mua USDT
-      {
-        fundId: fund.id,
-        accountId: binanceAccount.id,
-        type: 'buy_usdt',
-        amount: 2000,
-        currency: 'USDT',
-        price: 25500,
-        note: 'Mua USDT qua Binance P2P'
-      },
-      // Mua BTC
-      {
-        fundId: fund.id,
-        accountId: binanceAccount.id,
-        type: 'buy_btc',
-        amount: 0.03,
-        currency: 'BTC',
-        price: 43000,
-        fee: 0.00003,
-        feeCurrency: 'BTC',
-        note: 'Mua BTC spot'
-      },
-      // Chuyển USDT sang Earn
-      {
-        fundId: fund.id,
-        type: 'transfer_usdt',
-        amount: 1000,
-        currency: 'USDT',
-        fromLocation: 'Binance Spot',
-        toLocation: 'Binance Earn',
-        note: 'Chuyển USDT sang Earn để hưởng lãi'
-      },
-      // Lãi suất từ Earn
-      {
-        fundId: fund.id,
-        accountId: earnAccount.id,
-        type: 'earn_interest',
-        amount: 50,
-        currency: 'USDT',
-        note: 'Lãi suất USDT Earn tháng 1'
-      }
-    ]
-
-    for (const tx of transactions) {
-      await db.transaction.create({ data: tx })
-    }
-
-    // Cập nhật holdings sau các giao dịch
-    await db.assetHolding.updateMany({
-      where: { fundId: fund.id, asset: 'VND' },
-      data: { amount: 49000000 } // 100M - 2000*25500 = 49M
-    })
-
-    await db.assetHolding.create({
-      data: {
-        fundId: fund.id,
-        accountId: binanceAccount.id,
-        asset: 'USDT',
-        amount: 1000, // 2000 - 1000 chuyển đi
-        location: 'Binance Spot'
-      }
-    })
-
-    await db.assetHolding.create({
-      data: {
-        fundId: fund.id,
-        accountId: earnAccount.id,
-        asset: 'USDT',
-        amount: 1050, // 1000 + 50 lãi
-        location: 'Binance Earn'
-      }
-    })
-
-    await db.assetHolding.create({
-      data: {
-        fundId: fund.id,
-        accountId: binanceAccount.id,
-        asset: 'BTC',
-        amount: 0.02997, // 0.03 - 0.00003 fee
-        location: 'Binance Spot'
-      }
-    })
-
     return NextResponse.json({
       success: true,
-      message: 'Demo data initialized successfully',
+      message: 'Empty fund initialized successfully',
       fundId: fund.id,
       fund: fund
     })
