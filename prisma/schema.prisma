@@ -18,6 +18,10 @@ model Fund {
   name        String
   description String?
   initialVnd  Float    @default(0) // Vốn ban đầu bằng VND
+  
+  // Cách tính giá TB khi nhận lãi Earn
+  earnInterestMethod String @default("reduce_avg_price") // 'reduce_avg_price' | 'keep_avg_price'
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   

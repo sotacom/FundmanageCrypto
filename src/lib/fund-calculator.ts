@@ -10,13 +10,19 @@ interface LocationState {
 }
 
 export async function recalculateFund(fundId: string) {
-    // 1. Fetch all transactions sorted by date
+    // 1. Fetch fund settings to know earnInterestMethod
+    const fundSettings = await db.fund.findUnique({
+        where: { id: fundId },
+        select: { earnInterestMethod: true }
+    })
+
+    // 2. Fetch all transactions sorted by date
     const transactions = await db.transaction.findMany({
         where: { fundId },
         orderBy: { createdAt: 'asc' }
     })
 
-    // 2. Initialize state
+    // 3. Initialize state
     const portfolio: Record<string, AssetState> = {} // asset -> { amount, avgPrice }
     const holdings: Record<string, LocationState> = {} // asset -> { location -> amount }
 
@@ -35,7 +41,7 @@ export async function recalculateFund(fundId: string) {
         holdings[asset][locKey] = (holdings[asset][locKey] || 0) + change
     }
 
-    // 3. Process transactions
+    // 4. Process transactions
     for (const tx of transactions) {
         let costBasis = 0
         let realizedPnL = 0
@@ -133,16 +139,27 @@ export async function recalculateFund(fundId: string) {
                 break
 
             case 'earn_interest':
-                // Lãi suất USDT: Tăng USDT, giá vốn = 0 (hoặc coi như mua giá 0)
-                // Cách tính: Coi như mua thêm USDT với giá 0
+                // Lãi suất USDT: 2 cách tính
                 const earnState = getAssetState('USDT')
-                const earnCost = (earnState.amount * earnState.avgPrice) + (tx.amount * 0)
-                const earnAmount = earnState.amount + tx.amount
 
-                earnState.avgPrice = earnCost / earnAmount
-                earnState.amount = earnAmount
+                if (fundSettings?.earnInterestMethod === 'keep_avg_price') {
+                    // ✨ CÁCH 2: Giữ nguyên giá TB
+                    // Không thay đổi avgPrice, chỉ tăng amount
+                    earnState.amount += tx.amount
+                    console.log(`Earn ${tx.amount} USDT - kept avg price at ${earnState.avgPrice}`)
 
-                updateLocation('USDT', tx.toLocation || tx.fromLocation, tx.amount) // Usually toLocation
+                } else {
+                    // CÁCH 1: Giảm giá TB (mặc định)
+                    // Coi như mua USDT với giá 0
+                    const earnCost = (earnState.amount * earnState.avgPrice) + (tx.amount * 0)
+                    const earnAmount = earnState.amount + tx.amount
+
+                    earnState.avgPrice = earnCost / earnAmount
+                    earnState.amount = earnAmount
+                    console.log(`Earn ${tx.amount} USDT - new avg price: ${earnState.avgPrice}`)
+                }
+
+                updateLocation('USDT', tx.toLocation || tx.fromLocation, tx.amount)
                 break
         }
 

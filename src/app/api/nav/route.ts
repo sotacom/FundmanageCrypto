@@ -72,7 +72,8 @@ export async function POST(request: NextRequest) {
       fund: {
         id: fund.id,
         name: fund.name,
-        initialVnd: fund.initialVnd
+        initialVnd: fund.initialVnd,
+        earnInterestMethod: fund.earnInterestMethod // ✨ Include settings
       },
       holdings: {
         vnd: vndCash,
@@ -192,10 +193,19 @@ async function getAssetMetrics(fundId: string, asset: string) {
     totalEarn += transaction.amount
   }
 
-  const avgPrice = totalAmount > 0 ? totalCost / totalAmount : 0
+  // ✨ Get avgPrice from AssetHolding (calculated by fund-calculator with earnInterestMethod)
+  const assetHolding = await db.assetHolding.findFirst({
+    where: {
+      fundId,
+      asset
+    }
+  })
+
+  // Use avgPrice from database (respects earnInterestMethod) 
+  const avgPrice = assetHolding?.avgPrice || 0
 
   return {
-    avgPrice,
+    avgPrice, // ← This now comes from fund-calculator!
     totalBought: totalAmount,
     totalSpent: totalCost,
     totalEarn

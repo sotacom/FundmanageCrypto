@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Plus, TrendingUp, TrendingDown, Wallet, DollarSign, Bitcoin, RefreshCw } from 'lucide-react'
 import { TransactionModal } from '@/components/TransactionForm'
 import TransactionHistory from '@/components/TransactionHistory'
+import FundSettings from '@/components/FundSettings'
 
 interface FundData {
   id: string
   name: string
   initialVnd: number
+  earnInterestMethod?: 'reduce_avg_price' | 'keep_avg_price' // Settings
   currentNav: {
     vnd: number
     usdt: number
@@ -107,6 +109,7 @@ export default function FundDashboard() {
               id: navData.fund.id,
               name: navData.fund.name,
               initialVnd: navData.fund.initialVnd,
+              earnInterestMethod: navData.fund.earnInterestMethod || 'reduce_avg_price',
               currentNav: {
                 vnd: navData.currentNav.vnd,
                 usdt: navData.currentNav.usdt
@@ -351,12 +354,13 @@ export default function FundDashboard() {
         </div>
 
         {/* Detailed Tabs */}
-        <Tabs defaultValue="holdings" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="holdings" className="space-y-4">
+          <TabsList>
             <TabsTrigger value="holdings">Sở hữu tài sản</TabsTrigger>
-            <TabsTrigger value="nav-analysis">Phân tích NAV</TabsTrigger>
-            <TabsTrigger value="prices">Giá trung bình</TabsTrigger>
-            <TabsTrigger value="transactions">Lịch sử giao dịch</TabsTrigger>
+            <TabsTrigger value="nav">Phân tích NAV</TabsTrigger>
+            <TabsTrigger value="avg-price">Giá trung bình</TabsTrigger>
+            <TabsTrigger value="history">Lịch sử giao dịch</TabsTrigger>
+            <TabsTrigger value="settings">Cài đặt</TabsTrigger>
           </TabsList>
 
           <TabsContent value="holdings" className="space-y-4">
@@ -505,7 +509,7 @@ export default function FundDashboard() {
             </div>
           </TabsContent>
 
-          <TabsContent value="prices" className="space-y-4">
+          <TabsContent value="avg-price" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
@@ -518,18 +522,44 @@ export default function FundDashboard() {
                   <div className="text-3xl font-bold text-blue-600">
                     {fundData.avgPrices.usdt.avgPrice.toLocaleString()} VND/USDT
                   </div>
+
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-blue-900">Phương pháp Earn:</span>
+                      <Badge variant={fundData.earnInterestMethod === 'keep_avg_price' ? 'default' : 'secondary'}>
+                        {fundData.earnInterestMethod === 'keep_avg_price' ? 'Giữ nguyên' : 'Giảm giá TB'}
+                      </Badge>
+                    </div>
+                  </div>
+
                   <div className="mt-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng USDT đã mua:</span>
-                      <span>{fundData.avgPrices.usdt.totalBought.toLocaleString()} USDT</span>
+                      <span className="font-medium">{fundData.avgPrices.usdt.totalBought.toLocaleString()} USDT</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng VND đã chi:</span>
-                      <span>{formatCurrency(fundData.avgPrices.usdt.totalSpent, 'VND')}</span>
+                      <span className="font-medium">{formatCurrency(fundData.avgPrices.usdt.totalSpent, 'VND')}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between text-sm border-t pt-2">
                       <span className="text-muted-foreground">USDT từ Earn:</span>
-                      <span>{fundData.avgPrices.usdt.totalEarn.toLocaleString()} USDT</span>
+                      <span className="font-semibold text-green-600">
+                        +{fundData.avgPrices.usdt.totalEarn.toLocaleString()} USDT
+                      </span>
+                    </div>
+                    {fundData.avgPrices.usdt.totalEarn > 0 && (
+                      <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                        {fundData.earnInterestMethod === 'keep_avg_price'
+                          ? '✓ Lãi Earn không làm thay đổi giá TB'
+                          : '✓ Lãi Earn đã được tính vào giá TB'
+                        }
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="text-muted-foreground">Giá P2P hiện tại:</span>
+                      <span className="font-medium text-green-600">
+                        {currentPrices?.usdtVnd.toLocaleString() || 'N/A'} VND
+                      </span>
                     </div>
                   </div>
                 </CardContent>
@@ -549,16 +579,28 @@ export default function FundDashboard() {
                   <div className="mt-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng BTC đã mua:</span>
-                      <span>{formatCurrency(fundData.avgPrices.btc.totalBought, 'BTC')}</span>
+                      <span className="font-medium">{formatCurrency(fundData.avgPrices.btc.totalBought, 'BTC')}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tổng USDT đã chi:</span>
-                      <span>{fundData.avgPrices.btc.totalSpent.toLocaleString()} USDT</span>
+                      <span className="font-medium">{fundData.avgPrices.btc.totalSpent.toLocaleString()} USDT</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Giá hiện tại:</span>
-                      <span>43,500 USDT</span>
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="text-muted-foreground">Giá Spot hiện tại:</span>
+                      <span className="font-medium text-orange-600">
+                        {currentPrices?.btcUsdt.toLocaleString() || 'N/A'} USDT
+                      </span>
                     </div>
+                    {currentPrices && fundData.avgPrices.btc.avgPrice > 0 && (
+                      <div className="flex justify-between text-sm pt-2 border-t">
+                        <span className="text-muted-foreground">Chênh lệch:</span>
+                        <span className={`font-semibold ${currentPrices.btcUsdt > fundData.avgPrices.btc.avgPrice ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                          {currentPrices.btcUsdt > fundData.avgPrices.btc.avgPrice ? '+' : ''}
+                          {((currentPrices.btcUsdt - fundData.avgPrices.btc.avgPrice) / fundData.avgPrices.btc.avgPrice * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -566,7 +608,21 @@ export default function FundDashboard() {
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-4">
-            <TransactionHistory fundId={fundData.id} refreshTrigger={refreshTrigger} />
+            <TransactionHistory fundId={fundData.id} />
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-4">
+            <div className="max-w-3xl">
+              <FundSettings
+                fundId={fundData.id}
+                currentMethod={fundData.earnInterestMethod || 'reduce_avg_price'}
+                onSettingsChanged={() => {
+                  // Refresh fund data after settings change
+                  setRefreshTrigger(prev => prev + 1)
+                }}
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </main>
