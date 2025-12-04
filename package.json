@@ -10,6 +10,9 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:supabase": "tsx scripts/migrate-to-supabase.ts",
+    "db:verify": "tsx scripts/verify-db-connection.ts",
     "db:reset": "prisma migrate reset",
     "reset-db": "prisma migrate reset --force"
   },

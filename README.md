@@ -61,8 +61,28 @@
 - **Language**: TypeScript 5
 - **Styling**: Tailwind CSS 4
 - **UI Components**: shadcn/ui (New York style)
-- **Database**: SQLite với Prisma ORM
+- **Database**: SQLite / Supabase (PostgreSQL)
+- **ORM**: Prisma ORM
 - **Icons**: Lucide React
+
+## 💾 Database Options
+
+Ứng dụng hỗ trợ 2 loại database:
+
+### 1. 🗄️ SQLite (Default)
+- **Ưu điểm**: Đơn giản, nhanh, không cần setup
+- **Sử dụng**: Development và testing
+- **File**: `prisma/dev.db`
+
+### 2. ☁️ Supabase (PostgreSQL)
+- **Ưu điểm**: Cloud-based, scalable, có dashboard UI
+- **Sử dụng**: Production deployment
+- **Setup**: Xem hướng dẫn chi tiết tại [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md)
+
+**Chuyển đổi giữa 2 database**:
+- Thay đổi `DATABASE_URL` trong file `.env`
+- Chạy `npm run db:generate` để regenerate Prisma client
+
 
 ## 📁 Cấu Trúc Database
 
@@ -102,13 +122,29 @@
    ```
 
 3. **Setup database**
+
+   **Option A: SQLite (Khuyến nghị cho development)**
    ```bash
+   npm run db:push
+   ```
+
+   **Option B: Supabase (Cho production)**
+   - Tạo Supabase project
+   - Copy connection string vào `.env`
+   - Xem hướng dẫn đầy đủ: [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md)
+   ```bash
+   npm run db:generate
    npm run db:push
    ```
 
 4. **Run development server**
    ```bash
    npm run dev
+   ```
+
+5. **Open browser**
+   ```
+   http://localhost:3000
    ```
 
 ---
@@ -240,7 +276,41 @@ NAV = VND_cash + USDT × Tỷ giá USDT/VND + BTC × Giá BTC/USDT × Tỷ giá 
 uPNL = NAV_hiện_tại - Vốn_ban_đầu
 ```
 
+## 🛠️ NPM Scripts
+
+### Development
+```bash
+npm run dev         # Start development server (port 3000)
+npm run build       # Build production bundle
+npm run start       # Start production server
+npm run lint        # Run ESLint
+```
+
+### Database Management
+
+#### Cơ Bản
+```bash
+npm run db:generate    # Generate Prisma Client (chạy sau khi đổi DATABASE_URL)
+npm run db:push        # Push schema to database (tạo/update tables)
+npm run db:migrate     # Create and run migrations
+npm run db:reset       # Reset database (⚠️ xóa toàn bộ data)
+```
+
+#### Supabase
+```bash
+npm run db:verify              # Kiểm tra kết nối database
+npm run db:migrate:supabase    # Migrate data từ SQLite → Supabase
+npm run db:migrate:deploy      # Deploy migrations (production)
+```
+
+**Khi nào dùng script nào?**
+- `db:generate` → Sau khi thay đổi `DATABASE_URL` hoặc `schema.prisma`
+- `db:push` → Setup database lần đầu hoặc sync schema changes
+- `db:verify` → Test xem database có kết nối được không
+- `db:migrate:supabase` → Chuyển data từ SQLite sang Supabase
+
 ## 🔧 API Endpoints
+
 
 ### Core APIs
 - `GET/POST /api/funds` - Quản lý quỹ
@@ -257,6 +327,7 @@ uPNL = NAV_hiện_tại - Vốn_ban_đầu
 ## 🎯 Tương Lai
 
 - [x] ✅ Real-time price updates từ Binance API
+- [x] ✅ Supabase (PostgreSQL) database support
 - [ ] Price caching (5-minute TTL)
 - [ ] Auto-refresh prices mỗi 30s
 - [ ] Charts & Analytics
@@ -265,6 +336,16 @@ uPNL = NAV_hiện_tại - Vốn_ban_đầu
 - [ ] Mobile app
 - [ ] Advanced tax calculations
 - [ ] Báo cáo kế toán theo chuẩn VN
+
+---
+
+## 📚 Additional Documentation
+
+- **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Tài liệu kiến trúc hệ thống đầy đủ
+- **[SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md)** - Hướng dẫn chi tiết setup Supabase
+- **[SUPABASE_QUICKREF.md](./docs/SUPABASE_QUICKREF.md)** - Quick reference cho Supabase
+- **[HowItWork.md](./HowItWork.md)** - Giải thích chi tiết cách tính NAV, uPNL
+- **[DeXuat.md](./DeXuat.md)** - Các đề xuất cải tiến và roadmap
 
 ## 📝 License
 

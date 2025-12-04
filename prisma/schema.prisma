@@ -8,8 +8,15 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// To use Supabase (PostgreSQL):
+// 1. Change provider to "postgresql"
+// 2. Update DATABASE_URL in .env to your Supabase connection string
+// 3. Run: npm run db:generate
+// 4. Run: npm run db:push
+// See: docs/SUPABASE_SETUP.md for full guide
+
 datasource db {
-  provider = "sqlite"
+  provider = "sqlite"  // Change to "postgresql" for Supabase
   url      = env("DATABASE_URL")
 }
 
