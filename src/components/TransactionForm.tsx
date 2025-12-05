@@ -55,6 +55,7 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
     type: initialData?.type || '',
     amount: initialData?.amount?.toString() || '',
     price: initialData?.price?.toString() || '',
+    totalVND: initialData?.price && initialData?.amount ? (parseFloat(initialData.price) * parseFloat(initialData.amount)).toFixed(0) : '',
     fee: initialData?.fee?.toString() || '',
     feeCurrency: initialData?.feeCurrency || '',
     fromLocation: initialData?.fromLocation || '',
@@ -120,6 +121,7 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             type: '',
             amount: '',
             price: '',
+            totalVND: '',
             fee: '',
             feeCurrency: '',
             fromLocation: '',
@@ -161,7 +163,40 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
   }
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value }
+
+      // Auto-calculate for USDT transactions
+      const isUSDTTransaction = ['buy_usdt', 'sell_usdt'].includes(prev.type)
+
+      if (isUSDTTransaction) {
+        // If user changes amount or price, recalculate totalVND
+        if (field === 'amount' || field === 'price') {
+          const amount = field === 'amount' ? value : prev.amount
+          const price = field === 'price' ? value : prev.price
+
+          if (amount && price && parseFloat(amount) > 0 && parseFloat(price) > 0) {
+            updated.totalVND = (parseFloat(amount) * parseFloat(price)).toFixed(0)
+          } else if (field === 'amount' && !value) {
+            updated.totalVND = ''
+          }
+        }
+
+        // If user changes totalVND, recalculate price
+        if (field === 'totalVND') {
+          const amount = prev.amount
+          const totalVND = value
+
+          if (amount && totalVND && parseFloat(amount) > 0 && parseFloat(totalVND) > 0) {
+            updated.price = (parseFloat(totalVND) / parseFloat(amount)).toFixed(2)
+          } else if (!value) {
+            updated.price = ''
+          }
+        }
+      }
+
+      return updated
+    })
   }
 
   return (
@@ -215,22 +250,54 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             />
           </div>
 
-          {/* Giá (nếu cần) */}
+          {/* Giá và Tổng VND (cho USDT) hoặc chỉ Giá (cho BTC) */}
           {needsPrice && (
-            <div className="space-y-2">
-              <Label htmlFor="price">
-                Giá {formData.type.includes('usdt') ? '(VND/USDT)' : '(USDT/BTC)'}
-              </Label>
-              <Input
-                id="price"
-                type="number"
-                step="0.01"
-                placeholder={formData.type.includes('usdt') ? "Nhập giá VND/USDT" : "Nhập giá USDT/BTC"}
-                value={formData.price}
-                onChange={(e) => handleInputChange('price', e.target.value)}
-                required
-              />
-            </div>
+            <>
+              {formData.type.includes('usdt') ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Giá (VND/USDT)</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      step="0.01"
+                      placeholder="Nhập giá VND/USDT"
+                      value={formData.price}
+                      onChange={(e) => handleInputChange('price', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="totalVND">Tổng VND</Label>
+                    <Input
+                      id="totalVND"
+                      type="number"
+                      step="1"
+                      placeholder="Hoặc nhập tổng VND"
+                      value={formData.totalVND}
+                      onChange={(e) => handleInputChange('totalVND', e.target.value)}
+                    />
+                    {formData.totalVND && (
+                      <p className="text-xs text-muted-foreground">
+                        {parseFloat(formData.totalVND).toLocaleString('vi-VN')} VND
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="price">Giá (USDT/BTC)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    placeholder="Nhập giá USDT/BTC"
+                    value={formData.price}
+                    onChange={(e) => handleInputChange('price', e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* Phí giao dịch (nếu cần) */}
