@@ -149,6 +149,30 @@
 
 ---
 
+## 🌐 Production Deployment
+
+### Deploy to Vercel with Supabase
+
+This application is production-ready and can be deployed to Vercel with Supabase PostgreSQL database.
+
+**📘 Full Deployment Guide**: [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+**Quick Steps**:
+1. ✅ Create Supabase project ([guide](./docs/SUPABASE_SETUP.md))
+2. ✅ Import GitHub repository to Vercel
+3. ✅ Configure `DATABASE_URL` environment variable
+4. ✅ Deploy and run initial database migration
+
+**Environment Variables Required**:
+- `DATABASE_URL` - Supabase PostgreSQL connection string
+  ```
+  postgresql://postgres:YOUR-PASSWORD@db.xxx.supabase.co:5432/postgres
+  ```
+
+See [.env.example](./.env.example) for all environment variables.
+
+---
+
 ## 🧪 Testing & Database Reset
 
 ### Reset Database về 0

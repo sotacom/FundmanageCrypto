@@ -4,13 +4,14 @@ const nextConfig: NextConfig = {
   output: "standalone",
   /* config options here */
   typescript: {
-    ignoreBuildErrors: true,
+    // Only ignore build errors in development, enforce in production
+    ignoreBuildErrors: process.env.NODE_ENV === 'development',
   },
-  // 禁用 Next.js 热重载，由 nodemon 处理重编译
+  // Disable strict mode for compatibility, but consider enabling in future
   reactStrictMode: false,
   eslint: {
-    // 构建时忽略ESLint错误
-    ignoreDuringBuilds: true,
+    // Only ignore during builds in development
+    ignoreDuringBuilds: process.env.NODE_ENV === 'development',
   },
 };
 
