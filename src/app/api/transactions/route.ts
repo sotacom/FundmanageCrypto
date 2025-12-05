@@ -28,6 +28,88 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Balance validation - check if source account has sufficient balance
+    if (['transfer_usdt', 'transfer_btc', 'sell_usdt', 'sell_btc', 'buy_btc'].includes(type)) {
+      const sourceAccountId = fromLocation // fromLocation now contains accountId
+
+      if (sourceAccountId) {
+        // Get current holdings for this account
+        const holdings = await db.assetHolding.findMany({
+          where: {
+            fundId,
+            accountId: sourceAccountId
+          }
+        })
+
+        // Determine which asset to check
+        let assetToCheck = ''
+        let requiredAmount = amount
+
+        if (type === 'transfer_usdt' || type === 'sell_usdt') {
+          assetToCheck = 'USDT'
+        } else if (type === 'transfer_btc' || type === 'sell_btc') {
+          assetToCheck = 'BTC'
+        } else if (type === 'buy_btc') {
+          assetToCheck = 'USDT'
+          requiredAmount = amount * (price || 0) + (feeCurrency === 'USDT' ? (fee || 0) : 0)
+        }
+
+        const holding = holdings.find(h => h.asset === assetToCheck)
+        const currentBalance = holding?.amount || 0
+
+        if (currentBalance < requiredAmount) {
+          return NextResponse.json(
+            {
+              error: `Số dư ${assetToCheck} không đủ. Có sẵn: ${currentBalance.toLocaleString('vi-VN', {
+                minimumFractionDigits: assetToCheck === 'BTC' ? 8 : 2,
+                maximumFractionDigits: assetToCheck === 'BTC' ? 8 : 2
+              })}, Cần: ${requiredAmount.toLocaleString('vi-VN', {
+                minimumFractionDigits: assetToCheck === 'BTC' ? 8 : 2,
+                maximumFractionDigits: assetToCheck === 'BTC' ? 8 : 2
+              })}`
+            },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // VND balance validation for buy_usdt
+    if (type === 'buy_usdt') {
+      const vndHoldings = await db.assetHolding.findFirst({
+        where: {
+          fundId,
+          asset: 'VND'
+        }
+      })
+
+      const vndBalance = vndHoldings?.amount || 0
+      const vndRequired = amount * (price || 0) + (feeCurrency === 'VND' ? (fee || 0) : 0)
+
+      if (vndBalance < vndRequired) {
+        return NextResponse.json(
+          {
+            error: `Số dư VND không đủ. Có sẵn: ${vndBalance.toLocaleString('vi-VN', {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0
+            })} VND, Cần: ${vndRequired.toLocaleString('vi-VN', {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0
+            })} VND`
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Prevent transfer to same account
+    if (['transfer_usdt', 'transfer_btc'].includes(type) && fromLocation && toLocation && fromLocation === toLocation) {
+      return NextResponse.json(
+        { error: 'Không thể chuyển đến cùng tài khoản. Vui lòng chọn tài khoản đích khác' },
+        { status: 400 }
+      )
+    }
+
     // Create transaction
     const transaction = await db.transaction.create({
       data: {
