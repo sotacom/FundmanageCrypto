@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Plus, AlertCircle, Trash2 } from 'lucide-react'
+import { Account, ACCOUNT_TYPE_LABELS } from '@/types/account'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,14 +43,6 @@ const transactionTypes = [
   { value: 'earn_interest', label: 'Lãi suất USDT Earn', currency: 'USDT' }
 ]
 
-const locations = [
-  'Binance Spot',
-  'Binance Earn',
-  'Ví lạnh 1',
-  'Ví lạnh 2',
-  'Ví khác'
-]
-
 export default function TransactionForm({ onSubmit, onCancel, fundId, initialData, transactionId }: TransactionFormProps) {
   const [formData, setFormData] = useState({
     type: initialData?.type || '',
@@ -58,22 +51,63 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
     totalVND: initialData?.price && initialData?.amount ? (parseFloat(initialData.price) * parseFloat(initialData.amount)).toFixed(0) : '',
     fee: initialData?.fee?.toString() || '',
     feeCurrency: initialData?.feeCurrency || '',
-    fromLocation: initialData?.fromLocation || '',
-    toLocation: initialData?.toLocation || '',
+    toAccountId: initialData?.accountId || initialData?.toLocation || '',
+    fromAccountId: initialData?.fromLocation || '',
     note: initialData?.note || ''
   })
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [loadingAccounts, setLoadingAccounts] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const selectedTransactionType = transactionTypes.find(t => t.value === formData.type)
   const needsPrice = ['buy_usdt', 'sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
-  const needsLocations = ['transfer_usdt', 'transfer_btc'].includes(formData.type)
+  const needsTransferLocations = ['transfer_usdt', 'transfer_btc'].includes(formData.type)
+  const needsFromAccount = ['sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
+  const needsToAccount = ['buy_usdt', 'buy_btc', 'sell_btc', 'earn_interest'].includes(formData.type)
   const needsFee = ['buy_btc', 'sell_btc'].includes(formData.type)
+
+  // Fetch accounts
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      if (!fundId) return
+
+      setLoadingAccounts(true)
+      try {
+        const response = await fetch(`/api/accounts?fundId=${fundId}&activeOnly=true`)
+        const data = await response.json()
+
+        if (response.ok) {
+          setAccounts(data.accounts)
+        }
+      } catch (err) {
+        console.error('Error fetching accounts:', err)
+      } finally {
+        setLoadingAccounts(false)
+      }
+    }
+
+    fetchAccounts()
+  }, [fundId])
+
+  // Get account balance helper
+  const getAccountBalance = (accountId: string | null, asset: 'USDT' | 'BTC'): number => {
+    if (!accountId) return 0
+    const account = accounts.find(a => a.id === accountId)
+    if (!account || !account.balances) return 0
+    return asset === 'USDT' ? account.balances.usdt : account.balances.btc
+  }
+
+  // Get selected account
+  const selectedFromAccount = accounts.find(a => a.id === formData.fromAccountId)
+  const selectedToAccount = accounts.find(a => a.id === formData.toAccountId)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setIsSubmitting(true)
 
     // Validation
     if (!formData.type || !formData.amount) {
@@ -86,9 +120,85 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
       return
     }
 
-    if (needsLocations && (!formData.fromLocation || !formData.toLocation)) {
-      setError('Vui lòng chọn nơi gửi và nơi nhận')
+    if (needsFromAccount && !formData.fromAccountId) {
+      setError('Vui lòng chọn tài khoản nguồn')
       return
+    }
+
+    if (needsToAccount && !formData.toAccountId) {
+      setError('Vui lòng chọn tài khoản đích')
+      return
+    }
+
+    if (needsTransferLocations && (!formData.fromAccountId || !formData.toAccountId)) {
+      setError('Vui lòng chọn tài khoản gửi và tài khoản nhận')
+      setIsSubmitting(false)
+      return
+    }
+
+    // Prevent transfer to same account
+    if (needsTransferLocations && formData.fromAccountId === formData.toAccountId) {
+      setError('Không thể chuyển đến cùng tài khoản. Vui lòng chọn tài khoản đích khác')
+      setIsSubmitting(false)
+      return
+    }
+
+    // Balance validation
+    const amount = parseFloat(formData.amount)
+
+    // Transfer USDT - check source account balance
+    if (formData.type === 'transfer_usdt') {
+      const sourceBalance = getAccountBalance(formData.fromAccountId, 'USDT')
+      if (amount > sourceBalance) {
+        setError(`Số dư USDT không đủ. Có sẵn: ${sourceBalance.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`)
+        setIsSubmitting(false)
+        return
+      }
+    }
+
+    // Transfer BTC - check source account balance
+    if (formData.type === 'transfer_btc') {
+      const sourceBalance = getAccountBalance(formData.fromAccountId, 'BTC')
+      if (amount > sourceBalance) {
+        setError(`Số dư BTC không đủ. Có sẵn: ${sourceBalance.toLocaleString('vi-VN', { minimumFractionDigits: 8, maximumFractionDigits: 8 })} BTC`)
+        setIsSubmitting(false)
+        return
+      }
+    }
+
+    // Sell USDT - check source account balance
+    if (formData.type === 'sell_usdt') {
+      const sourceBalance = getAccountBalance(formData.fromAccountId, 'USDT')
+      if (amount > sourceBalance) {
+        setError(`Số dư USDT không đủ. Có sẵn: ${sourceBalance.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`)
+        setIsSubmitting(false)
+        return
+      }
+    }
+
+    // Buy BTC - check USDT source account balance
+    if (formData.type === 'buy_btc' && formData.price) {
+      const price = parseFloat(formData.price)
+      const usdtNeeded = amount * price
+      const fee = formData.fee && formData.feeCurrency === 'USDT' ? parseFloat(formData.fee) : 0
+      const totalUsdtNeeded = usdtNeeded + fee
+
+      const sourceBalance = getAccountBalance(formData.fromAccountId, 'USDT')
+      if (totalUsdtNeeded > sourceBalance) {
+        setError(`Số dư USDT không đủ. Cần: ${totalUsdtNeeded.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT, Có sẵn: ${sourceBalance.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`)
+        setIsSubmitting(false)
+        return
+      }
+    }
+
+    // Sell BTC - check BTC source account balance
+    if (formData.type === 'sell_btc') {
+      const sourceBalance = getAccountBalance(formData.fromAccountId, 'BTC')
+      if (amount > sourceBalance) {
+        setError(`Số dư BTC không đủ. Có sẵn: ${sourceBalance.toLocaleString('vi-VN', { minimumFractionDigits: 8, maximumFractionDigits: 8 })} BTC`)
+        setIsSubmitting(false)
+        return
+      }
     }
 
     try {
@@ -97,6 +207,9 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
         fundId,
         id: transactionId,
         ...formData,
+        accountId: needsToAccount && !needsFromAccount ? formData.toAccountId : null,
+        fromLocation: (needsFromAccount || needsTransferLocations) ? formData.fromAccountId : null,
+        toLocation: (needsToAccount || needsTransferLocations) ? formData.toAccountId : null,
         amount: parseFloat(formData.amount),
         price: needsPrice ? parseFloat(formData.price) : null,
         fee: needsFee ? parseFloat(formData.fee) : null,
@@ -124,8 +237,8 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             totalVND: '',
             fee: '',
             feeCurrency: '',
-            fromLocation: '',
-            toLocation: '',
+            toAccountId: '',
+            fromAccountId: '',
             note: ''
           })
         }
@@ -136,6 +249,8 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
     } catch (error) {
       console.error('Error submitting transaction:', error)
       setError('Lỗi kết nối, vui lòng thử lại')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -329,34 +444,114 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             </div>
           )}
 
-          {/* Nơi gửi/Nơi nhận (cho giao dịch chuyển khoản) */}
-          {needsLocations && (
-            <div className="grid grid-cols-2 gap-4">
+          {/* Tài khoản nguồn (cho giao dịch bán và mua BTC) */}
+          {needsFromAccount && (
+            <div className="space-y-2">
+              <Label htmlFor="fromAccountId">
+                {formData.type === 'sell_usdt' ? 'Tài khoản USDT' : formData.type === 'buy_btc' ? 'Tài khoản USDT' : 'Tài khoản BTC'}
+              </Label>
+              <Select value={formData.fromAccountId} onValueChange={(value) => handleInputChange('fromAccountId', value)} disabled={loadingAccounts}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingAccounts ? "Đang tải..." : "Chọn tài khoản"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name} ({ACCOUNT_TYPE_LABELS[account.type]})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedFromAccount && selectedFromAccount.balances && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Số dư:
+                  {formData.type === 'sell_usdt' || formData.type === 'buy_btc' ? (
+                    <span className="font-semibold text-green-600 dark:text-green-400 ml-1">
+                      {selectedFromAccount.balances.usdt.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-orange-600 dark:text-orange-400 ml-1">
+                      {selectedFromAccount.balances.btc.toLocaleString('vi-VN', { minimumFractionDigits: 8, maximumFractionDigits: 8 })} BTC
+                    </span>
+                  )}
+                </p>
+              )}
+              {accounts.length === 0 && !loadingAccounts && (
+                <p className="text-sm text-muted-foreground">
+                  Chưa có tài khoản. Vui lòng tạo tài khoản trước trong tab &quot;Quản lý tài khoản&quot;.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Tài khoản đích (cho giao dịch mua) */}
+          {needsToAccount && (
+            <div className="space-y-2">
+              <Label htmlFor="toAccountId">
+                {formData.type === 'buy_usdt' ? 'Tài khoản USDT' : formData.type === 'buy_btc' ? 'Tài khoản BTC' : formData.type === 'sell_btc' ? 'Tài khoản USDT' : 'Tài khoản'}
+              </Label>
+              <Select value={formData.toAccountId} onValueChange={(value) => handleInputChange('toAccountId', value)} disabled={loadingAccounts}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingAccounts ? "Đang tải..." : "Chọn tài khoản"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name} ({ACCOUNT_TYPE_LABELS[account.type]})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {accounts.length === 0 && !loadingAccounts && (
+                <p className="text-sm text-muted-foreground">
+                  Chưa có tài khoản. Vui lòng tạo tài khoản trước trong tab &quot;Quản lý tài khoản&quot;.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Tài khoản chuyển (cho giao dịch transfer) */}
+          {needsTransferLocations && (
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="fromLocation">Từ</Label>
-                <Select value={formData.fromLocation} onValueChange={(value) => handleInputChange('fromLocation', value)}>
+                <Label htmlFor="fromAccountId">Từ tài khoản</Label>
+                <Select value={formData.fromAccountId} onValueChange={(value) => handleInputChange('fromAccountId', value)} disabled={loadingAccounts}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Chọn nơi gửi" />
+                    <SelectValue placeholder={loadingAccounts ? "Đang tải..." : "Chọn tài khoản gửi"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {locations.map((location) => (
-                      <SelectItem key={location} value={location}>
-                        {location}
+                    {accounts.filter(acc => acc.id !== formData.toAccountId).map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {selectedFromAccount && selectedFromAccount.balances && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Số dư:
+                    {formData.type === 'transfer_usdt' ? (
+                      <span className="font-semibold text-green-600 dark:text-green-400 ml-1">
+                        {selectedFromAccount.balances.usdt.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-orange-600 dark:text-orange-400 ml-1">
+                        {selectedFromAccount.balances.btc.toLocaleString('vi-VN', { minimumFractionDigits: 8, maximumFractionDigits: 8 })} BTC
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="toLocation">Đến</Label>
-                <Select value={formData.toLocation} onValueChange={(value) => handleInputChange('toLocation', value)}>
+                <Label htmlFor="toAccountId">Đến tài khoản</Label>
+                <Select value={formData.toAccountId} onValueChange={(value) => handleInputChange('toAccountId', value)} disabled={loadingAccounts}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Chọn nơi nhận" />
+                    <SelectValue placeholder={loadingAccounts ? "Đang tải..." : "Chọn tài khoản nhận"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {locations.map((location) => (
-                      <SelectItem key={location} value={location}>
-                        {location}
+                    {accounts.filter(acc => acc.id !== formData.fromAccountId).map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -423,11 +618,11 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             )}
 
             <div className="flex space-x-4">
-              <Button type="button" variant="outline" onClick={onCancel}>
+              <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                 Hủy
               </Button>
-              <Button type="submit">
-                {transactionId ? 'Cập nhật' : 'Tạo giao dịch'}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Đang xử lý...' : (transactionId ? 'Cập nhật' : 'Tạo giao dịch')}
               </Button>
             </div>
           </div>

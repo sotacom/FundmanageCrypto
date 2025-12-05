@@ -5,8 +5,8 @@ interface PortfolioState {
     avgPrice: number
 }
 
-interface HoldingsByLocation {
-    [location: string]: number
+interface HoldingsByAccount {
+    [accountId: string]: number
 }
 
 export async function recalculateFund(fundId: string) {
@@ -32,7 +32,7 @@ export async function recalculateFund(fundId: string) {
 
     // 3. Initialize portfolio state
     const portfolio: { [asset: string]: PortfolioState } = {}
-    const holdings: { [asset: string]: HoldingsByLocation } = {}
+    const holdings: { [asset: string]: HoldingsByAccount } = {}
 
     const getAssetState = (asset: string): PortfolioState => {
         if (!portfolio[asset]) {
@@ -41,11 +41,11 @@ export async function recalculateFund(fundId: string) {
         return portfolio[asset]
     }
 
-    const updateLocation = (asset: string, location: string | null, delta: number) => {
-        const loc = location || 'Unassigned'
+    const updateAccount = (asset: string, accountId: string | null, delta: number) => {
+        const accId = accountId || 'unassigned'
         if (!holdings[asset]) holdings[asset] = {}
-        if (!holdings[asset][loc]) holdings[asset][loc] = 0
-        holdings[asset][loc] += delta
+        if (!holdings[asset][accId]) holdings[asset][accId] = 0
+        holdings[asset][accId] += delta
     }
 
     // 4. Process transactions
@@ -75,7 +75,7 @@ export async function recalculateFund(fundId: string) {
                 }
 
                 // Góp vốn: Tăng VND
-                updateLocation('VND', null, tx.amount)
+                updateAccount('VND', null, tx.amount)
                 getAssetState('VND').amount += tx.amount
                 // VND luôn có giá 1
                 getAssetState('VND').avgPrice = 1
@@ -86,7 +86,7 @@ export async function recalculateFund(fundId: string) {
                 console.log(`Capital Out: -${tx.amount} VND`)
 
                 // Rút vốn: Giảm VND
-                updateLocation('VND', null, -tx.amount)
+                updateAccount('VND', null, -tx.amount)
                 getAssetState('VND').amount -= tx.amount
                 break
 
@@ -112,7 +112,7 @@ export async function recalculateFund(fundId: string) {
                 }
 
                 // 1. Giảm VND
-                updateLocation('VND', null, -vndSpent)
+                updateAccount('VND', null, -vndSpent)
                 getAssetState('VND').amount -= vndSpent
 
                 // 2. Tăng USDT & Tính lại AvgPrice (dùng số thực tế nhận được)
@@ -123,7 +123,7 @@ export async function recalculateFund(fundId: string) {
                 usdtState.avgPrice = totalUsdtCost / totalUsdtAmount
                 usdtState.amount = totalUsdtAmount
 
-                updateLocation('USDT', tx.toLocation, usdtBuyReceived)
+                updateAccount('USDT', tx.accountId || tx.toLocation, usdtBuyReceived)
                 break
 
             case 'sell_usdt':
@@ -154,24 +154,24 @@ export async function recalculateFund(fundId: string) {
 
                 // 2. Giảm USDT
                 sellUsdtState.amount -= usdtSellAmount
-                updateLocation('USDT', tx.fromLocation, -usdtSellAmount)
+                updateAccount('USDT', tx.fromLocation, -usdtSellAmount)
 
                 // 2a. Trừ phí USDT nếu có
                 if (usdtSellFeeAmount > 0) {
                     sellUsdtState.amount -= usdtSellFeeAmount
-                    updateLocation('USDT', tx.fromLocation, -usdtSellFeeAmount)
+                    updateAccount('USDT', tx.fromLocation, -usdtSellFeeAmount)
                 }
 
                 // 3. Tăng VND (số thực tế nhận được)
-                updateLocation('VND', null, vndReceived)
+                updateAccount('VND', null, vndReceived)
                 getAssetState('VND').amount += vndReceived
                 break
 
             case 'transfer_usdt':
                 // Chuyển USDT giữa các địa điểm
                 const usdtTransferAmount = tx.amount
-                updateLocation('USDT', tx.fromLocation, -usdtTransferAmount)
-                updateLocation('USDT', tx.toLocation, usdtTransferAmount)
+                updateAccount('USDT', tx.fromLocation, -usdtTransferAmount)
+                updateAccount('USDT', tx.toLocation, usdtTransferAmount)
                 break
 
             case 'buy_btc':
@@ -198,7 +198,7 @@ export async function recalculateFund(fundId: string) {
                 // 1. Giảm USDT
                 const usdtForBtc = getAssetState('USDT')
                 usdtForBtc.amount -= usdtSpent
-                updateLocation('USDT', tx.fromLocation, -usdtSpent)
+                updateAccount('USDT', tx.fromLocation, -usdtSpent)
 
                 // 2. Tăng BTC (dùng số thực tế nhận được)
                 const btcState = getAssetState('BTC')
@@ -208,7 +208,7 @@ export async function recalculateFund(fundId: string) {
                 btcState.avgPrice = totalBtcCost / totalBtcAmount
                 btcState.amount = totalBtcAmount
 
-                updateLocation('BTC', tx.toLocation, btcBuyReceived)
+                updateAccount('BTC', tx.toLocation, btcBuyReceived)
                 break
 
             case 'sell_btc':
@@ -239,12 +239,12 @@ export async function recalculateFund(fundId: string) {
 
                 // 2. Giảm BTC
                 sellBtcState.amount -= btcSellAmount
-                updateLocation('BTC', tx.fromLocation, -btcSellAmount)
+                updateAccount('BTC', tx.fromLocation, -btcSellAmount)
 
                 // 2a. Trừ phí BTC nếu có
                 if (btcFeeAmount > 0) {
                     sellBtcState.amount -= btcFeeAmount
-                    updateLocation('BTC', tx.fromLocation, -btcFeeAmount)
+                    updateAccount('BTC', tx.fromLocation, -btcFeeAmount)
                 }
 
                 // 3. Tăng USDT (số thực tế nhận được)
@@ -256,14 +256,14 @@ export async function recalculateFund(fundId: string) {
                 usdtFromBtc.avgPrice = newUsdtCost / newUsdtAmount
                 usdtFromBtc.amount = newUsdtAmount
 
-                updateLocation('USDT', tx.toLocation, usdtReceived)
+                updateAccount('USDT', tx.toLocation, usdtReceived)
                 break
 
             case 'transfer_btc':
                 // Chuyển BTC giữa các địa điểm
                 const btcTransferAmount = tx.amount
-                updateLocation('BTC', tx.fromLocation, -btcTransferAmount)
-                updateLocation('BTC', tx.toLocation, btcTransferAmount)
+                updateAccount('BTC', tx.fromLocation, -btcTransferAmount)
+                updateAccount('BTC', tx.toLocation, btcTransferAmount)
                 break
 
             case 'earn_interest':
@@ -286,7 +286,7 @@ export async function recalculateFund(fundId: string) {
                     console.log(`Earn Interest (Reduce Avg Price): +${tx.amount} USDT, new avgPrice: ${earnState.avgPrice}`)
                 }
 
-                updateLocation('USDT', tx.toLocation, tx.amount)
+                updateAccount('USDT', tx.toLocation, tx.amount)
                 break
 
             default:
@@ -308,18 +308,21 @@ export async function recalculateFund(fundId: string) {
         where: { fundId }
     })
 
-    // Create new holdings from calculated portfolio
-    for (const [asset, state] of Object.entries(portfolio)) {
-        if (state.amount > 0.00000001) { // Skip negligible amounts
-            await db.assetHolding.create({
-                data: {
-                    fundId,
-                    asset,
-                    amount: state.amount,
-                    avgPrice: state.avgPrice,
-                    location: asset === 'VND' ? null : 'Binance'
-                }
-            })
+    // Create new holdings from calculated holdings by account
+    for (const [asset, accountHoldings] of Object.entries(holdings)) {
+        for (const [accountId, amount] of Object.entries(accountHoldings)) {
+            if (amount > 0.00000001) { // Skip negligible amounts
+                await db.assetHolding.create({
+                    data: {
+                        fundId,
+                        asset,
+                        amount,
+                        avgPrice: portfolio[asset]?.avgPrice || 0,
+                        accountId: accountId === 'unassigned' ? null : accountId,
+                        location: null // Deprecated, now using accountId
+                    }
+                })
+            }
         }
     }
 

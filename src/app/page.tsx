@@ -10,6 +10,7 @@ import { TransactionModal } from '@/components/TransactionForm'
 import TransactionHistory from '@/components/TransactionHistory'
 import FundSettings from '@/components/FundSettings'
 import PnLAnalysis from '@/components/PnLAnalysis'
+import AccountManagement from '@/components/AccountManagement'
 import { formatCurrency, formatNumber, formatPercentage } from '@/lib/format'
 import { SiteHeader } from '@/components/site-header'
 
@@ -76,6 +77,7 @@ export default function FundDashboard() {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [currentPrices, setCurrentPrices] = useState<CurrentPrices | null>(null)
   const [pricesLoading, setPricesLoading] = useState(false)
+  const [accounts, setAccounts] = useState<any[]>([])
 
   // Fetch current prices
   const fetchCurrentPrices = async () => {
@@ -208,6 +210,25 @@ export default function FundDashboard() {
     fetchFundData()
   }, [])
 
+  // Fetch accounts with balances
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      if (!fundData?.id) return
+
+      try {
+        const response = await fetch(`/api/accounts?fundId=${fundData.id}`)
+        const data = await response.json()
+        if (response.ok) {
+          setAccounts(data.accounts.filter((acc: any) => acc.balances && (acc.balances.usdt > 0 || acc.balances.btc > 0)))
+        }
+      } catch (error) {
+        console.error('Error fetching accounts:', error)
+      }
+    }
+
+    fetchAccounts()
+  }, [fundData?.id, refreshTrigger])
+
   const handleRefreshData = () => {
     setRefreshTrigger(prev => prev + 1)
   }
@@ -319,6 +340,7 @@ export default function FundDashboard() {
             <TabsTrigger value="holdings">Sở hữu tài sản</TabsTrigger>
             <TabsTrigger value="nav">Phân tích NAV</TabsTrigger>
             <TabsTrigger value="avg-price">Giá trung bình</TabsTrigger>
+            <TabsTrigger value="accounts">Quản lý tài khoản</TabsTrigger>
             <TabsTrigger value="history">Lịch sử giao dịch</TabsTrigger>
             <TabsTrigger value="settings">Cài đặt</TabsTrigger>
           </TabsList>
@@ -397,6 +419,60 @@ export default function FundDashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Account Breakdown */}
+            {accounts.length > 0 && (
+              <div className="mt-6 space-y-4">
+                <h3 className="text-lg font-semibold">Phân bổ theo tài khoản</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* USDT Breakdown */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">USDT theo tài khoản</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {accounts.filter(acc => acc.balances?.usdt > 0).map(account => (
+                        <div key={account.id} className="flex justify-between items-center py-2 border-b last:border-0">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">{account.name}</span>
+                            <span className="text-xs text-muted-foreground">{account.type}</span>
+                          </div>
+                          <span className="font-semibold text-green-600 dark:text-green-400">
+                            {account.balances.usdt.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                          </span>
+                        </div>
+                      ))}
+                      {accounts.filter(acc => acc.balances?.usdt > 0).length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">Không có USDT trong tài khoản nào</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* BTC Breakdown */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">BTC theo tài khoản</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {accounts.filter(acc => acc.balances?.btc > 0).map(account => (
+                        <div key={account.id} className="flex justify-between items-center py-2 border-b last:border-0">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">{account.name}</span>
+                            <span className="text-xs text-muted-foreground">{account.type}</span>
+                          </div>
+                          <span className="font-semibold text-orange-600 dark:text-orange-400">
+                            {account.balances.btc.toLocaleString('vi-VN', { minimumFractionDigits: 8, maximumFractionDigits: 8 })} BTC
+                          </span>
+                        </div>
+                      ))}
+                      {accounts.filter(acc => acc.balances?.btc > 0).length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">Không có BTC trong tài khoản nào</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="nav-analysis" className="space-y-4">
@@ -574,6 +650,11 @@ export default function FundDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Account Management Tab */}
+          <TabsContent value="accounts" className="space-y-4">
+            <AccountManagement fundId={fundData.id} />
           </TabsContent>
 
           {/* Transaction History Tab */}
