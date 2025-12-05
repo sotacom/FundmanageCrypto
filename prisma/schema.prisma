@@ -16,7 +16,7 @@ generator client {
 // See: docs/SUPABASE_SETUP.md for full guide
 
 datasource db {
-  provider = "sqlite"  // Change to "postgresql" for Supabase
+  provider = "postgresql"  // Change to "postgresql" for Supabase
   url      = env("DATABASE_URL")
 }
 
