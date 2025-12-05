@@ -9,10 +9,6 @@ const nextConfig: NextConfig = {
   },
   // Disable strict mode for compatibility, but consider enabling in future
   reactStrictMode: false,
-  eslint: {
-    // Only ignore during builds in development
-    ignoreDuringBuilds: process.env.NODE_ENV === 'development',
-  },
 };
 
 export default nextConfig;
