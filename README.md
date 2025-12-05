@@ -9,6 +9,7 @@
 - **uPNL (Unrealized Profit/Loss)**: Lãi/lỗ chưa hiện thực với phần trăm
 - **PnL (Realized Profit/Loss)**: Lãi/lỗ đã hiện thực
 - **Tổng Lãi/Lỗ**: Tổng lợi nhuận từ khi bắt đầu
+- **🟢 Live Prices**: Giá real-time từ Binance P2P (USDT/VND) và Spot (BTC/USDT) với nút refresh thủ công
 
 ### 💰 Quản Lý Tài Sản
 - **VND**: Tiền mặt Việt Nam Đồng
@@ -43,14 +44,45 @@
 - **Quản lý phí giao dịch**: Theo dõi phí mua/bán BTC
 - **Lãi/lỗ 2 loại**: Chưa hiện thực và đã hiện thực
 
+### 💱 Live Price Fetching
+- **Binance P2P API**: Lấy giá USDT/VND từ thị trường P2P
+  - Fetch top 12 advertisers
+  - Loại bỏ 2 ads đầu (tránh scam/outliers)
+  - Tính trung bình 10 ads còn lại
+- **Binance Spot API**: Lấy giá BTC/USDT từ spot market
+- **Auto-refresh**: Tự động lấy giá khi load trang
+- **Manual refresh**: Nút refresh để cập nhật giá thủ công
+- **Fallback mechanism**: Tự động dùng giá mặc định nếu API fail
+- **Visual indicators**: Badge hiển thị "🟢 Live" hoặc "⚪ Default"
+
 ## 🛠 Công Nghệ
 
 - **Frontend**: Next.js 15 với App Router
 - **Language**: TypeScript 5
 - **Styling**: Tailwind CSS 4
 - **UI Components**: shadcn/ui (New York style)
-- **Database**: SQLite với Prisma ORM
+- **Database**: SQLite / Supabase (PostgreSQL)
+- **ORM**: Prisma ORM
 - **Icons**: Lucide React
+
+## 💾 Database Options
+
+Ứng dụng hỗ trợ 2 loại database:
+
+### 1. 🗄️ SQLite (Default)
+- **Ưu điểm**: Đơn giản, nhanh, không cần setup
+- **Sử dụng**: Development và testing
+- **File**: `prisma/dev.db`
+
+### 2. ☁️ Supabase (PostgreSQL)
+- **Ưu điểm**: Cloud-based, scalable, có dashboard UI
+- **Sử dụng**: Production deployment
+- **Setup**: Xem hướng dẫn chi tiết tại [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md)
+
+**Chuyển đổi giữa 2 database**:
+- Thay đổi `DATABASE_URL` trong file `.env`
+- Chạy `npm run db:generate` để regenerate Prisma client
+
 
 ## 📁 Cấu Trúc Database
 
@@ -90,7 +122,18 @@
    ```
 
 3. **Setup database**
+
+   **Option A: SQLite (Khuyến nghị cho development)**
    ```bash
+   npm run db:push
+   ```
+
+   **Option B: Supabase (Cho production)**
+   - Tạo Supabase project
+   - Copy connection string vào `.env`
+   - Xem hướng dẫn đầy đủ: [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md)
+   ```bash
+   npm run db:generate
    npm run db:push
    ```
 
@@ -104,15 +147,103 @@
    http://localhost:3000
    ```
 
+---
+
+## 🧪 Testing & Database Reset
+
+### Reset Database về 0
+
+Khi muốn test lại từ đầu với dữ liệu sạch:
+
+**Method 1: Sử dụng script (Khuyến nghị)**
+```bash
+npm run reset-db
+```
+
+**Method 2: Chạy lệnh trực tiếp**
+```bash
+# Xóa database và reset về trạng thái ban đầu
+npx prisma migrate reset --force
+```
+
+**Method 3: Xóa file database thủ công**
+```bash
+# Xóa database file
+rm -f prisma/dev.db prisma/dev.db-journal
+
+# Chạy lại migrations
+npx prisma migrate dev
+```
+
+### Sau khi reset:
+
+1. ✅ Database hoàn toàn sạch (0 transactions, 0 funds)
+2. ✅ Tất cả migrations đã apply
+3. ✅ Prisma Client đã regenerate
+4. ⚠️ Refresh browser để app tự tạo fund mới
+
+### Test Scenarios
+
+**Scenario 1: Test Equity Tracking**
+1. Reset database: `npm run reset-db`
+2. Góp vốn: 1,000,000,000 VND
+3. Mua USDT: 10,000 USDT @ 27,500 VND/USDT
+4. Mua BTC: 0.01 BTC @ 92,000 USDT/BTC
+5. ✅ Check: Vốn Chủ Sở Hữu vẫn là 1B (không tăng sau mua)
+6. ✅ Check: Lợi Nhuận hiển thị riêng
+7. ✅ Check: ROI tính đúng
+
+**Scenario 2: Test Fee Handling**
+1. Reset database
+2. Mua BTC với fee: 0.0001 BTC (fee trong BTC)
+3. ✅ Check: Giá TB phản ánh đúng fee (BTC received giảm)
+4. Bán BTC với fee: 10 USDT (fee trong USDT)
+5. ✅ Check: PnL tính đúng (USDT received giảm)
+
+**Scenario 3: Test Earn Interest Methods**
+1. Reset database
+2. Mua USDT, check giá TB
+3. Nhận Earn Interest
+4. ✅ Check method "Giảm giá TB": giá TB giảm
+5. Đổi sang method "Giữ nguyên giá TB" trong Settings
+6. ✅ Check: Giá TB không đổi khi nhận Earn tiếp
+
+**Scenario 4: Test Multiple Capital Contributions**
+1. Reset database
+2. Góp vốn initial: 1B
+3. Mua USDT, mua BTC
+4. Góp vốn additional: 500M
+5. ✅ Check: Initial Capital = 1B, Additional Capital = 500M
+6. Rút vốn: 200M
+7. ✅ Check: Withdrawn Capital = 200M, Total Capital = 1.3B
+
+---
+
+## 📚 Documentation
+
+Xem thêm tài liệu chi tiết:
+
+- **[HowItWork.md](./HowItWork.md)** - Giải thích chi tiết cách tính NAV, uPNL, và công thức
+- **[DeXuat.md](./DeXuat.md)** - Các đề xuất cải tiến và roadmap
+
+---
+
+## 🛠️ Tech Stack
+5. **Open browser**
+   ```
+   http://localhost:3000
+   ```
+
 ## 📱 Giao Diện
 
 ### Main Dashboard
-- Cards hiển thị NAV, uPNL, PnL
-- Tabs chi tiết:
-  - **Sở hữu tài sản**: Phân bổ theo loại tài sản
-  - **Phân tích NAV**: 2 phương pháp tính NAV
-  - **Giá trung bình**: Giá mua TB USDT/VND, BTC/USDT
-  - **Lịch sử giao dịch**: Danh sách giao dịch gần đây
+- **Header**: Hiển thị giá live USDT/VND và BTC/USDT với timestamp và nút refresh
+- **Cards**: NAV, uPNL, PnL với màu sắc trực quan
+- **Tabs chi tiết**:
+  - **Sở hữu tài sản**: Phân bổ theo loại tài sản với tỷ trọng
+  - **Phân tích NAV**: 2 phương pháp tính NAV (VND và USDT)
+  - **Giá trung bình**: Giá mua TB USDT/VND, BTC/USDT theo weighted average
+  - **Lịch sử giao dịch**: Danh sách giao dịch gần đây với filter và edit
 
 ### Transaction Form
 - Modal tạo giao dịch mới
@@ -145,22 +276,76 @@ NAV = VND_cash + USDT × Tỷ giá USDT/VND + BTC × Giá BTC/USDT × Tỷ giá 
 uPNL = NAV_hiện_tại - Vốn_ban_đầu
 ```
 
+## 🛠️ NPM Scripts
+
+### Development
+```bash
+npm run dev         # Start development server (port 3000)
+npm run build       # Build production bundle
+npm run start       # Start production server
+npm run lint        # Run ESLint
+```
+
+### Database Management
+
+#### Cơ Bản
+```bash
+npm run db:generate    # Generate Prisma Client (chạy sau khi đổi DATABASE_URL)
+npm run db:push        # Push schema to database (tạo/update tables)
+npm run db:migrate     # Create and run migrations
+npm run db:reset       # Reset database (⚠️ xóa toàn bộ data)
+```
+
+#### Supabase
+```bash
+npm run db:verify              # Kiểm tra kết nối database
+npm run db:migrate:supabase    # Migrate data từ SQLite → Supabase
+npm run db:migrate:deploy      # Deploy migrations (production)
+```
+
+**Khi nào dùng script nào?**
+- `db:generate` → Sau khi thay đổi `DATABASE_URL` hoặc `schema.prisma`
+- `db:push` → Setup database lần đầu hoặc sync schema changes
+- `db:verify` → Test xem database có kết nối được không
+- `db:migrate:supabase` → Chuyển data từ SQLite sang Supabase
+
 ## 🔧 API Endpoints
 
+
+### Core APIs
 - `GET/POST /api/funds` - Quản lý quỹ
-- `GET/POST /api/transactions` - Giao dịch
-- `GET/POST /api/nav` - Tính NAV & PnL
-- `GET/POST /api/avg-price` - Giá mua TB
+- `GET/POST /api/transactions` - Giao dịch (CRUD)
+- `GET/POST /api/nav` - Tính NAV & PnL (auto-fetch live prices)
+- `GET/POST /api/avg-price` - Giá mua trung bình
 - `POST /api/init` - Khởi tạo data demo
+
+### Price APIs
+- `GET /api/prices/current` - Lấy giá live từ Binance
+  - Response: `{ usdtVnd, btcUsdt, timestamp, sources }`
+  - Sources: `binance_p2p` | `binance_spot` | `default`
 
 ## 🎯 Tương Lai
 
-- [ ] Real-time price updates từ Binance API
+- [x] ✅ Real-time price updates từ Binance API
+- [x] ✅ Supabase (PostgreSQL) database support
+- [ ] Price caching (5-minute TTL)
+- [ ] Auto-refresh prices mỗi 30s
 - [ ] Charts & Analytics
 - [ ] Export reports (Excel, PDF)
 - [ ] Multi-user support
 - [ ] Mobile app
 - [ ] Advanced tax calculations
+- [ ] Báo cáo kế toán theo chuẩn VN
+
+---
+
+## 📚 Additional Documentation
+
+- **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Tài liệu kiến trúc hệ thống đầy đủ
+- **[SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md)** - Hướng dẫn chi tiết setup Supabase
+- **[SUPABASE_QUICKREF.md](./docs/SUPABASE_QUICKREF.md)** - Quick reference cho Supabase
+- **[HowItWork.md](./HowItWork.md)** - Giải thích chi tiết cách tính NAV, uPNL
+- **[DeXuat.md](./DeXuat.md)** - Các đề xuất cải tiến và roadmap
 
 ## 📝 License
 

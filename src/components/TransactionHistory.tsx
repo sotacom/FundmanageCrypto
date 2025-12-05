@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowUpDown, RefreshCw, Pencil } from 'lucide-react'
 import { TransactionModal } from './TransactionForm'
+import { formatCurrency } from '@/lib/format'
 
 interface Transaction {
   id: string
@@ -72,19 +73,6 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
       fetchTransactions()
     }
   }, [fundId, refreshTrigger])
-
-  const formatCurrency = (amount: number, currency: string) => {
-    if (currency === 'VND') {
-      return new Intl.NumberFormat('vi-VN', {
-        style: 'currency',
-        currency: 'VND'
-      }).format(amount).replace('₫', 'VND')
-    } else if (currency === 'BTC') {
-      return `${amount.toFixed(8)} BTC`
-    } else {
-      return `${amount.toLocaleString()} ${currency}`
-    }
-  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN', {
@@ -232,9 +220,10 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
                         </p>
                       )}
                       {transaction.fee && transaction.fee > 0 && (
-                        <p className="text-sm text-orange-600">
-                          Phí: {formatCurrency(transaction.fee, transaction.feeCurrency || transaction.currency)}
-                        </p>
+                        <div className="flex items-center gap-1 text-xs text-orange-600 mt-1">
+                          <span>💳</span>
+                          <span>Phí: {formatCurrency(transaction.fee, transaction.feeCurrency || transaction.currency)}</span>
+                        </div>
                       )}
                     </div>
                     <Button

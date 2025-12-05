@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentPrices } from '@/lib/binance-price-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,9 +41,15 @@ export async function POST(request: NextRequest) {
     const usdtBalance = holdings['USDT'] || 0
     const btcBalance = holdings['BTC'] || 0
 
-    // Giá hiện tại (mặc định nếu không cung cấp)
-    const usdtVndPrice = currentPrices?.usdtVnd || 25500
-    const btcUsdtPrice = currentPrices?.btcUsdt || 43000
+    // Lấy giá hiện tại - ưu tiên từ params, nếu không có thì fetch từ Binance
+    let usdtVndPrice = currentPrices?.usdtVnd
+    let btcUsdtPrice = currentPrices?.btcUsdt
+
+    if (!usdtVndPrice || !btcUsdtPrice) {
+      const livePrices = await getCurrentPrices()
+      usdtVndPrice = usdtVndPrice || livePrices.usdtVnd
+      btcUsdtPrice = btcUsdtPrice || livePrices.btcUsdt
+    }
 
     // Tính NAV theo VND
     const navVnd = vndCash + (usdtBalance * usdtVndPrice) + (btcBalance * btcUsdtPrice * usdtVndPrice)
@@ -65,7 +72,16 @@ export async function POST(request: NextRequest) {
       fund: {
         id: fund.id,
         name: fund.name,
-        initialVnd: fund.initialVnd
+        earnInterestMethod: fund.earnInterestMethod,
+        // Equity breakdown
+        equity: {
+          initialCapital: fund.initialCapital,
+          additionalCapital: fund.additionalCapital,
+          withdrawnCapital: fund.withdrawnCapital,
+          totalCapital: fund.initialCapital + fund.additionalCapital - fund.withdrawnCapital,
+          retainedEarnings: fund.retainedEarnings,
+          totalEquity: fund.initialCapital + fund.additionalCapital - fund.withdrawnCapital + fund.retainedEarnings
+        }
       },
       holdings: {
         vnd: vndCash,
@@ -185,10 +201,19 @@ async function getAssetMetrics(fundId: string, asset: string) {
     totalEarn += transaction.amount
   }
 
-  const avgPrice = totalAmount > 0 ? totalCost / totalAmount : 0
+  // ✨ Get avgPrice from AssetHolding (calculated by fund-calculator with earnInterestMethod)
+  const assetHolding = await db.assetHolding.findFirst({
+    where: {
+      fundId,
+      asset
+    }
+  })
+
+  // Use avgPrice from database (respects earnInterestMethod) 
+  const avgPrice = assetHolding?.avgPrice || 0
 
   return {
-    avgPrice,
+    avgPrice, // ← This now comes from fund-calculator!
     totalBought: totalAmount,
     totalSpent: totalCost,
     totalEarn
