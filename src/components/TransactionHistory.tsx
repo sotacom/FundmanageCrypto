@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { ArrowUpDown, RefreshCw, Pencil } from 'lucide-react'
 import { TransactionModal } from './TransactionForm'
 import { formatCurrency } from '@/lib/format'
+import { formatDateInTimezone } from '@/lib/timezone-utils'
+import { usePermission } from '@/contexts/PermissionContext'
 
 interface Transaction {
   id: string
@@ -42,6 +44,7 @@ const transactionTypeLabels: Record<string, string> = {
 }
 
 export default function TransactionHistory({ fundId, refreshTrigger }: TransactionHistoryProps) {
+  const { canEdit, currentFundTimezone } = usePermission()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -75,13 +78,7 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
   }, [fundId, refreshTrigger])
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    return formatDateInTimezone(dateString, currentFundTimezone)
   }
 
   const getTransactionIcon = (type: string) => {
@@ -226,13 +223,15 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
                         </div>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setEditingTransaction(transaction)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditingTransaction(transaction)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

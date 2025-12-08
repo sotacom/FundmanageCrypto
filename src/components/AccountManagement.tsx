@@ -23,12 +23,14 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Account, ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from '@/types/account'
+import { usePermission } from '@/contexts/PermissionContext'
 
 interface AccountManagementProps {
     fundId: string
 }
 
 export default function AccountManagement({ fundId }: AccountManagementProps) {
+    const { canEdit } = usePermission()
     const [accounts, setAccounts] = useState<Account[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -144,29 +146,31 @@ export default function AccountManagement({ fundId }: AccountManagementProps) {
                         Quản lý các tài khoản lưu trữ USDT, BTC
                     </p>
                 </div>
-                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="flex items-center gap-2" onClick={() => setEditingAccount(null)}>
-                            <Plus className="h-4 w-4" />
-                            Thêm tài khoản
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>
-                                {editingAccount ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản mới'}
-                            </DialogTitle>
-                            <DialogDescription>
-                                {editingAccount ? 'Cập nhật thông tin tài khoản' : 'Nhập thông tin cho tài khoản mới'}
-                            </DialogDescription>
-                        </DialogHeader>
-                        <AccountForm
-                            account={editingAccount}
-                            onSubmit={handleCreateOrUpdate}
-                            onCancel={handleCloseDialog}
-                        />
-                    </DialogContent>
-                </Dialog>
+                {canEdit && (
+                    <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button className="flex items-center gap-2" onClick={() => setEditingAccount(null)}>
+                                <Plus className="h-4 w-4" />
+                                Thêm tài khoản
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>
+                                    {editingAccount ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản mới'}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {editingAccount ? 'Cập nhật thông tin tài khoản' : 'Nhập thông tin cho tài khoản mới'}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <AccountForm
+                                account={editingAccount}
+                                onSubmit={handleCreateOrUpdate}
+                                onCancel={handleCloseDialog}
+                            />
+                        </DialogContent>
+                    </Dialog>
+                )}
             </div>
 
             {/* Error Alert */}
@@ -183,10 +187,12 @@ export default function AccountManagement({ fundId }: AccountManagementProps) {
                     <CardContent className="pt-6">
                         <div className="text-center py-8">
                             <p className="text-muted-foreground mb-4">Chưa có tài khoản nào</p>
-                            <Button onClick={() => setIsCreateDialogOpen(true)} className="flex items-center gap-2 mx-auto">
-                                <Plus className="h-4 w-4" />
-                                Thêm tài khoản đầu tiên
-                            </Button>
+                            {canEdit && (
+                                <Button onClick={() => setIsCreateDialogOpen(true)} className="flex items-center gap-2 mx-auto">
+                                    <Plus className="h-4 w-4" />
+                                    Thêm tài khoản đầu tiên
+                                </Button>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -232,48 +238,52 @@ export default function AccountManagement({ fundId }: AccountManagementProps) {
                                 )}
 
                                 <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleEdit(account)}
-                                        className="flex items-center gap-2"
-                                    >
-                                        <Pencil className="h-3 w-3" />
-                                        Sửa
-                                    </Button>
-                                    <AlertDialog
-                                        open={deletingAccountId === account.id}
-                                        onOpenChange={(open) => setDeletingAccountId(open ? account.id : null)}
-                                    >
-                                        <AlertDialogTrigger asChild>
+                                    {canEdit && (
+                                        <>
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="flex items-center gap-2 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                                onClick={() => handleEdit(account)}
+                                                className="flex items-center gap-2"
                                             >
-                                                <Trash2 className="h-3 w-3" />
-                                                Xóa
+                                                <Pencil className="h-3 w-3" />
+                                                Sửa
                                             </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Xác nhận xóa tài khoản</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Bạn có chắc chắn muốn xóa tài khoản &quot;{account.name}&quot;?
-                                                    {' '}Nếu tài khoản có giao dịch liên quan, nó sẽ được đánh dấu là không hoạt động thay vì bị xóa.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Hủy</AlertDialogCancel>
-                                                <AlertDialogAction
-                                                    onClick={() => handleDelete(account.id)}
-                                                    className="bg-destructive hover:bg-destructive/90"
-                                                >
-                                                    Xóa
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                            <AlertDialog
+                                                open={deletingAccountId === account.id}
+                                                onOpenChange={(open) => setDeletingAccountId(open ? account.id : null)}
+                                            >
+                                                <AlertDialogTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="flex items-center gap-2 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                                    >
+                                                        <Trash2 className="h-3 w-3" />
+                                                        Xóa
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Xác nhận xóa tài khoản</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Bạn có chắc chắn muốn xóa tài khoản &quot;{account.name}&quot;?
+                                                            {' '}Nếu tài khoản có giao dịch liên quan, nó sẽ được đánh dấu là không hoạt động thay vì bị xóa.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                                                        <AlertDialogAction
+                                                            onClick={() => handleDelete(account.id)}
+                                                            className="bg-destructive hover:bg-destructive/90"
+                                                        >
+                                                            Xóa
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>

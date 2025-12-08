@@ -13,10 +13,13 @@ import PnLAnalysis from '@/components/PnLAnalysis'
 import AccountManagement from '@/components/AccountManagement'
 import { formatCurrency, formatNumber, formatPercentage } from '@/lib/format'
 import { SiteHeader } from '@/components/site-header'
+import { usePermission } from '@/contexts/PermissionContext'
+import { NewUserOnboarding } from '@/components/NewUserOnboarding'
 
 interface FundData {
   id: string
   name: string
+  description?: string | null
   initialVnd: number
   earnInterestMethod?: 'reduce_avg_price' | 'keep_avg_price' // Settings
   equity: {
@@ -72,6 +75,7 @@ interface CurrentPrices {
 }
 
 export default function FundDashboard() {
+  const { currentFundId, currentFundName, currentFundTimezone, canManage, loading: permissionLoading } = usePermission()
   const [fundData, setFundData] = useState<FundData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -103,54 +107,55 @@ export default function FundDashboard() {
 
   useEffect(() => {
     const fetchFundData = async () => {
+      // Wait for permission context to load
+      if (permissionLoading) return
+
+      // If no fund selected, show empty state
+      if (!currentFundId) {
+        setLoading(false)
+        return
+      }
+
       try {
-        // First, try to initialize demo data
-        const initResponse = await fetch('/api/init', { method: 'POST' })
-        const initData = await initResponse.json()
+        const fundId = currentFundId
 
-        if (initData.success) {
-          const fundId = initData.fundId
+        // Fetch NAV data - API will fetch live prices from Binance automatically
+        const navResponse = await fetch(`/api/nav?fundId=${fundId}`)
 
-          // Fetch NAV data - API will fetch live prices from Binance automatically
-          const navResponse = await fetch(`/api/nav?fundId=${fundId}`)
+        if (navResponse.ok) {
+          const navData = await navResponse.json()
 
-          if (navResponse.ok) {
-            const navData = await navResponse.json()
-
-            // Transform API data to component format
-            const transformedData: FundData = {
-              id: navData.fund.id,
-              name: navData.fund.name,
-              initialVnd: navData.fund.initialVnd || 0,
-              earnInterestMethod: navData.fund.earnInterestMethod || 'reduce_avg_price',
-              equity: navData.fund.equity || {
-                initialCapital: 0,
-                additionalCapital: 0,
-                withdrawnCapital: 0,
-                totalCapital: 0,
-                retainedEarnings: 0,
-                totalEquity: 0
-              },
-              currentNav: {
-                vnd: navData.currentNav.vnd,
-                usdt: navData.currentNav.usdt
-              },
-              unrealizedPnL: {
-                vnd: navData.unrealizedPnL.vnd,
-                usdt: navData.unrealizedPnL.usdt,
-                percentage: navData.unrealizedPnL.percentage
-              },
-              realizedPnL: navData.realizedPnL,
-              holdings: navData.holdings,
-              avgPrices: navData.avgPrices
-            }
-
-            setFundData(transformedData)
-          } else {
-            throw new Error('Failed to fetch NAV data')
+          // Transform API data to component format
+          const transformedData: FundData = {
+            id: navData.fund.id,
+            name: navData.fund.name,
+            initialVnd: navData.fund.initialVnd || 0,
+            earnInterestMethod: navData.fund.earnInterestMethod || 'reduce_avg_price',
+            equity: navData.fund.equity || {
+              initialCapital: 0,
+              additionalCapital: 0,
+              withdrawnCapital: 0,
+              totalCapital: 0,
+              retainedEarnings: 0,
+              totalEquity: 0
+            },
+            currentNav: {
+              vnd: navData.currentNav.vnd,
+              usdt: navData.currentNav.usdt
+            },
+            unrealizedPnL: {
+              vnd: navData.unrealizedPnL.vnd,
+              usdt: navData.unrealizedPnL.usdt,
+              percentage: navData.unrealizedPnL.percentage
+            },
+            realizedPnL: navData.realizedPnL,
+            holdings: navData.holdings,
+            avgPrices: navData.avgPrices
           }
+
+          setFundData(transformedData)
         } else {
-          throw new Error('Failed to initialize demo data')
+          throw new Error('Failed to fetch NAV data')
         }
       } catch (error) {
         console.error('Error setting up demo:', error)
@@ -208,7 +213,7 @@ export default function FundDashboard() {
     }
 
     fetchFundData()
-  }, [])
+  }, [currentFundId, permissionLoading])
 
   // Fetch accounts with balances
   useEffect(() => {
@@ -244,10 +249,16 @@ export default function FundDashboard() {
   }
 
   if (!fundData) {
+    // Show onboarding for new users without any funds
+    if (!currentFundId && !permissionLoading) {
+      return <NewUserOnboarding />
+    }
+
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600">Không tìm thấy dữ liệu quỹ</p>
+          <p className="text-muted-foreground">Không tìm thấy dữ liệu quỹ</p>
+          <p className="text-sm text-muted-foreground mt-2">Vui lòng chọn quỹ khác hoặc tạo quỹ mới</p>
         </div>
       </div>
     )
@@ -342,7 +353,7 @@ export default function FundDashboard() {
             <TabsTrigger value="avg-price">Giá trung bình</TabsTrigger>
             <TabsTrigger value="accounts">Quản lý tài khoản</TabsTrigger>
             <TabsTrigger value="history">Lịch sử giao dịch</TabsTrigger>
-            <TabsTrigger value="settings">Cài đặt</TabsTrigger>
+            {canManage && <TabsTrigger value="settings">Cài đặt</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="holdings" className="space-y-4">
@@ -665,19 +676,24 @@ export default function FundDashboard() {
             />
           </TabsContent>
 
-          {/* Settings Tab */}
-          <TabsContent value="settings" className="space-y-4">
-            <div className="max-w-3xl">
-              <FundSettings
-                fundId={fundData.id}
-                currentMethod={fundData.earnInterestMethod || 'reduce_avg_price'}
-                onSettingsChanged={() => {
-                  // Refresh fund data after settings change
-                  setRefreshTrigger(prev => prev + 1)
-                }}
-              />
-            </div>
-          </TabsContent>
+          {/* Settings Tab - Only for owners */}
+          {canManage && (
+            <TabsContent value="settings" className="space-y-4">
+              <div className="max-w-3xl">
+                <FundSettings
+                  fundId={fundData.id}
+                  fundName={fundData.name}
+                  fundDescription={fundData.description}
+                  fundTimezone={currentFundTimezone}
+                  currentMethod={fundData.earnInterestMethod || 'reduce_avg_price'}
+                  onSettingsChanged={() => {
+                    // Refresh fund data after settings change
+                    setRefreshTrigger(prev => prev + 1)
+                  }}
+                />
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>

@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { BACKUP_VERSION } from '@/lib/backup-utils'
+import { getCurrentUser, checkFundAccess } from '@/lib/auth-utils'
 
 /**
  * GET /api/backup?fundId={fundId}
  * Export all fund data as JSON backup file
+ * Requires authentication and at least viewer access
  */
 export async function GET(request: NextRequest) {
     try {
+        // Check authentication
+        const user = await getCurrentUser()
+        if (!user) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            )
+        }
+
         const { searchParams } = new URL(request.url)
         const fundId = searchParams.get('fundId')
 
@@ -15,6 +26,15 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Fund ID is required' },
                 { status: 400 }
+            )
+        }
+
+        // Check if user has access to the fund (at least viewer)
+        const access = await checkFundAccess(user.id, fundId, 'viewer')
+        if (!access.hasAccess) {
+            return NextResponse.json(
+                { error: 'Bạn không có quyền truy cập quỹ này' },
+                { status: 403 }
             )
         }
 
@@ -50,7 +70,22 @@ export async function GET(request: NextRequest) {
             })
         ])
 
-        // Create backup data structure
+        // Create backup data structure (exclude sensitive fields like ownerId)
+        const fundDataForBackup = {
+            id: fund.id,
+            name: fund.name,
+            description: fund.description,
+            initialVnd: fund.initialVnd,
+            initialCapital: fund.initialCapital,
+            additionalCapital: fund.additionalCapital,
+            withdrawnCapital: fund.withdrawnCapital,
+            retainedEarnings: fund.retainedEarnings,
+            earnInterestMethod: fund.earnInterestMethod,
+            createdAt: fund.createdAt,
+            updatedAt: fund.updatedAt
+            // Note: ownerId is intentionally excluded from backup
+        }
+
         const backupData = {
             version: BACKUP_VERSION,
             exportedAt: new Date().toISOString(),
@@ -63,7 +98,7 @@ export async function GET(request: NextRequest) {
                 totalFees: fees.length
             },
             data: {
-                fund,
+                fund: fundDataForBackup,
                 accounts,
                 transactions,
                 assetHoldings,

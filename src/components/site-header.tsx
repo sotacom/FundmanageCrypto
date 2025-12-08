@@ -2,10 +2,24 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, LogOut, User } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { TransactionModal } from "@/components/TransactionForm"
+import { FundSelector } from "@/components/FundSelector"
+import { PermissionGate } from "@/components/PermissionGate"
 import { formatNumber } from "@/lib/format"
+import { useAuth } from "@/contexts/AuthContext"
+import { usePermission } from "@/contexts/PermissionContext"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import Link from "next/link"
 
 interface CurrentPrices {
     usdtVnd: number
@@ -18,7 +32,7 @@ interface CurrentPrices {
 }
 
 interface SiteHeaderProps {
-    fundName: string
+    fundName?: string
     currentPrices: CurrentPrices | null
     pricesLoading: boolean
     onRefreshPrices: () => void
@@ -32,17 +46,66 @@ export function SiteHeader({
     onRefreshPrices,
     fundId
 }: SiteHeaderProps) {
+    const { user, signOut } = useAuth()
+    const { currentFundId, canEdit } = usePermission()
+
+    const getInitials = (name?: string, email?: string) => {
+        if (name) {
+            return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+        }
+        if (email) {
+            return email.slice(0, 2).toUpperCase()
+        }
+        return 'U'
+    }
+
+    const handleSignOut = async () => {
+        await signOut()
+        window.location.href = '/auth/login'
+    }
+
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-xl font-bold tracking-tight md:text-2xl">{fundName}</h1>
-                            <p className="text-xs text-muted-foreground md:text-sm">Quản lý quỹ đầu tư cá nhân</p>
-                        </div>
-                        <div className="md:hidden">
+                    <div className="flex items-center justify-between gap-4">
+                        {/* Fund Selector */}
+                        <FundSelector />
+
+                        <div className="md:hidden flex items-center gap-2">
                             <ModeToggle />
+                            {/* User Menu Mobile */}
+                            {user && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="rounded-full">
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarImage src={user.user_metadata?.avatar_url} />
+                                                <AvatarFallback>
+                                                    {getInitials(user.user_metadata?.name, user.email)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>
+                                            {user.user_metadata?.name || user.email}
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/profile">
+                                                <User className="h-4 w-4 mr-2" />
+                                                Hồ sơ & Quản lý
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={handleSignOut}>
+                                            <LogOut className="h-4 w-4 mr-2" />
+                                            Đăng xuất
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            )}
                         </div>
                     </div>
 
@@ -91,11 +154,55 @@ export function SiteHeader({
                         )}
 
                         <div className="flex items-center gap-2">
-                            <div className="flex-1 sm:flex-none">
-                                <TransactionModal fundId={fundId} />
-                            </div>
-                            <div className="hidden md:block">
+                            {/* Transaction Modal - Only show for editors/owners */}
+                            <PermissionGate canEdit>
+                                <div className="flex-1 sm:flex-none">
+                                    <TransactionModal fundId={currentFundId || fundId} />
+                                </div>
+                            </PermissionGate>
+
+                            <div className="hidden md:flex items-center gap-2">
                                 <ModeToggle />
+
+                                {/* User Menu Desktop */}
+                                {user && (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="rounded-full">
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage src={user.user_metadata?.avatar_url} />
+                                                    <AvatarFallback>
+                                                        {getInitials(user.user_metadata?.name, user.email)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuLabel className="font-normal">
+                                                <div className="flex flex-col space-y-1">
+                                                    <p className="text-sm font-medium">
+                                                        {user.user_metadata?.name || 'Người dùng'}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {user.email}
+                                                    </p>
+                                                </div>
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem asChild>
+                                                <Link href="/profile">
+                                                    <User className="h-4 w-4 mr-2" />
+                                                    Hồ sơ & Quản lý quỹ
+                                                </Link>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={handleSignOut}>
+                                                <LogOut className="h-4 w-4 mr-2" />
+                                                Đăng xuất
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                )}
                             </div>
                         </div>
                     </div>

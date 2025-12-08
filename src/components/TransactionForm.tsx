@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Plus, AlertCircle, Trash2 } from 'lucide-react'
 import { Account, ACCOUNT_TYPE_LABELS } from '@/types/account'
+import { utcToLocal, getCurrentDatetimeInTimezone } from '@/lib/timezone-utils'
+import { usePermission } from '@/contexts/PermissionContext'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +46,7 @@ const transactionTypes = [
 ]
 
 export default function TransactionForm({ onSubmit, onCancel, fundId, initialData, transactionId }: TransactionFormProps) {
+  const { currentFundTimezone } = usePermission()
   const [formData, setFormData] = useState({
     type: initialData?.type || '',
     amount: initialData?.amount?.toString() || '',
@@ -53,7 +56,10 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
     feeCurrency: initialData?.feeCurrency || '',
     toAccountId: initialData?.accountId || initialData?.toLocation || '',
     fromAccountId: initialData?.fromLocation || '',
-    note: initialData?.note || ''
+    note: initialData?.note || '',
+    transactionDate: initialData?.createdAt
+      ? utcToLocal(initialData.createdAt, currentFundTimezone)
+      : getCurrentDatetimeInTimezone(currentFundTimezone)
   })
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
@@ -239,7 +245,8 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             feeCurrency: '',
             toAccountId: '',
             fromAccountId: '',
-            note: ''
+            note: '',
+            transactionDate: getCurrentDatetimeInTimezone(currentFundTimezone)
           })
         }
         setError(null)
@@ -570,6 +577,20 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
               onChange={(e) => handleInputChange('note', e.target.value)}
               rows={3}
             />
+          </div>
+
+          {/* Ngày giờ giao dịch */}
+          <div className="space-y-2">
+            <Label htmlFor="transactionDate">Ngày giờ giao dịch</Label>
+            <Input
+              id="transactionDate"
+              type="datetime-local"
+              value={formData.transactionDate}
+              onChange={(e) => handleInputChange('transactionDate', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Mặc định là thời điểm hiện tại. Có thể điều chỉnh để ghi nhận giao dịch trong quá khứ.
+            </p>
           </div>
 
           {/* Nút hành động */}

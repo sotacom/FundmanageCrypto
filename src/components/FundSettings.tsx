@@ -3,26 +3,41 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
-import { InfoIcon, Loader2, Download, Upload, AlertTriangle, CheckCircle2, Database } from 'lucide-react'
+import { InfoIcon, Loader2, Download, Upload, AlertTriangle, CheckCircle2, Database, Pencil } from 'lucide-react'
 import { parseBackupFile, getLastBackupTimestamp, formatBackupTimestamp } from '@/lib/backup-utils'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { COMMON_TIMEZONES } from '@/lib/timezone-utils'
 import type { BackupData } from '@/lib/backup-utils'
 
 interface FundSettingsProps {
     fundId: string
+    fundName: string
+    fundDescription?: string | null
+    fundTimezone: string
     currentMethod: 'reduce_avg_price' | 'keep_avg_price'
     onSettingsChanged?: () => void
 }
 
-export default function FundSettings({ fundId, currentMethod, onSettingsChanged }: FundSettingsProps) {
+export default function FundSettings({ fundId, fundName, fundDescription, fundTimezone, currentMethod, onSettingsChanged }: FundSettingsProps) {
     const [method, setMethod] = useState<'reduce_avg_price' | 'keep_avg_price'>(currentMethod)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
+
+    // Fund info states
+    const [editingName, setEditingName] = useState(false)
+    const [name, setName] = useState(fundName)
+    const [description, setDescription] = useState(fundDescription || '')
+    const [timezone, setTimezone] = useState(fundTimezone)
+    const [savingInfo, setSavingInfo] = useState(false)
+    const [infoSuccess, setInfoSuccess] = useState(false)
 
     // Backup & Restore states
     const [backupLoading, setBackupLoading] = useState(false)
@@ -40,11 +55,59 @@ export default function FundSettings({ fundId, currentMethod, onSettingsChanged 
         setMethod(currentMethod)
     }, [currentMethod])
 
+    useEffect(() => {
+        setName(fundName)
+        setDescription(fundDescription || '')
+        setTimezone(fundTimezone)
+    }, [fundName, fundDescription, fundTimezone])
+
     // Load last backup timestamp on mount
     useEffect(() => {
         const timestamp = getLastBackupTimestamp()
         setLastBackup(timestamp)
     }, [])
+
+    const handleSaveInfo = async () => {
+        if (!name.trim()) {
+            setError('Tên quỹ không được để trống')
+            return
+        }
+
+        setSavingInfo(true)
+        setError(null)
+        setInfoSuccess(false)
+
+        try {
+            const response = await fetch('/api/funds/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fundId,
+                    name: name.trim(),
+                    description: description.trim() || null,
+                    timezone
+                })
+            })
+
+            const data = await response.json()
+
+            if (response.ok) {
+                setInfoSuccess(true)
+                setEditingName(false)
+                if (onSettingsChanged) {
+                    onSettingsChanged()
+                }
+                setTimeout(() => setInfoSuccess(false), 3000)
+            } else {
+                setError(data.error || 'Không thể cập nhật thông tin quỹ')
+            }
+        } catch (err) {
+            console.error('Error saving fund info:', err)
+            setError('Không thể cập nhật thông tin quỹ')
+        } finally {
+            setSavingInfo(false)
+        }
+    }
 
     const handleSave = async () => {
         setSaving(true)
@@ -156,7 +219,10 @@ export default function FundSettings({ fundId, currentMethod, onSettingsChanged 
             const response = await fetch('/api/restore', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(backupPreview)
+                body: JSON.stringify({
+                    targetFundId: fundId,  // Use current fund as target
+                    backupData: backupPreview
+                })
             })
 
             const result = await response.json()
@@ -186,6 +252,121 @@ export default function FundSettings({ fundId, currentMethod, onSettingsChanged 
 
     return (
         <>
+            {/* Fund Info Card */}
+            <Card className="mb-6">
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        Thông Tin Quỹ
+                        {!editingName && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingName(true)}
+                            >
+                                <Pencil className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </CardTitle>
+                    <CardDescription>
+                        Tên và mô tả quỹ đầu tư
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {editingName ? (
+                        <>
+                            <div className="space-y-2">
+                                <Label htmlFor="fundName">Tên quỹ</Label>
+                                <Input
+                                    id="fundName"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Nhập tên quỹ"
+                                    disabled={savingInfo}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="fundDescription">Mô tả (tùy chọn)</Label>
+                                <Textarea
+                                    id="fundDescription"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Mô tả ngắn về quỹ"
+                                    disabled={savingInfo}
+                                    rows={2}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="fundTimezone">Múi giờ</Label>
+                                <Select value={timezone} onValueChange={setTimezone} disabled={savingInfo}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Chọn múi giờ" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {COMMON_TIMEZONES.map((tz) => (
+                                            <SelectItem key={tz.value} value={tz.value}>
+                                                {tz.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                    Dùng để hiển thị ngày giờ giao dịch
+                                </p>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setEditingName(false)
+                                        setName(fundName)
+                                        setDescription(fundDescription || '')
+                                    }}
+                                    disabled={savingInfo}
+                                >
+                                    Hủy
+                                </Button>
+                                <Button
+                                    onClick={handleSaveInfo}
+                                    disabled={savingInfo || !name.trim()}
+                                >
+                                    {savingInfo && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                                    Lưu
+                                </Button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div>
+                                <Label className="text-muted-foreground text-sm">Tên quỹ</Label>
+                                <p className="font-medium text-lg">{fundName}</p>
+                            </div>
+                            {fundDescription && (
+                                <div>
+                                    <Label className="text-muted-foreground text-sm">Mô tả</Label>
+                                    <p className="text-sm">{fundDescription}</p>
+                                </div>
+                            )}
+                            <div>
+                                <Label className="text-muted-foreground text-sm">Múi giờ</Label>
+                                <p className="text-sm">
+                                    {COMMON_TIMEZONES.find(tz => tz.value === fundTimezone)?.label || fundTimezone}
+                                </p>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Info Success Message */}
+                    {infoSuccess && (
+                        <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <AlertDescription className="text-green-800 dark:text-green-100">
+                                ✓ Thông tin quỹ đã được cập nhật!
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Cài Đặt Tính Toán</CardTitle>

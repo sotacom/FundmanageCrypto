@@ -1,15 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentPrices } from '@/lib/binance-price-service'
+import { getCurrentUser, checkFundAccess } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { fundId, currentPrices } = await request.json()
 
     if (!fundId) {
       return NextResponse.json(
         { error: 'Fund ID is required' },
         { status: 400 }
+      )
+    }
+
+    // Check fund access (need at least viewer role)
+    const access = await checkFundAccess(user.id, fundId, 'viewer')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền truy cập quỹ này' },
+        { status: 403 }
       )
     }
 
@@ -118,28 +134,54 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const fundId = searchParams.get('fundId')
-  const usdtVndPrice = searchParams.get('usdtVndPrice')
-  const btcUsdtPrice = searchParams.get('btcUsdtPrice')
+  try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  if (!fundId) {
+    const { searchParams } = new URL(request.url)
+    const fundId = searchParams.get('fundId')
+    const usdtVndPrice = searchParams.get('usdtVndPrice')
+    const btcUsdtPrice = searchParams.get('btcUsdtPrice')
+
+    if (!fundId) {
+      return NextResponse.json(
+        { error: 'Fund ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // Check fund access (need at least viewer role)
+    const access = await checkFundAccess(user.id, fundId, 'viewer')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền truy cập quỹ này' },
+        { status: 403 }
+      )
+    }
+
+    // Create a mock request for the POST handler
+    const mockRequest = new NextRequest('http://localhost', {
+      method: 'POST',
+      body: JSON.stringify({
+        fundId,
+        currentPrices: {
+          usdtVnd: usdtVndPrice ? parseFloat(usdtVndPrice) : undefined,
+          btcUsdt: btcUsdtPrice ? parseFloat(btcUsdtPrice) : undefined
+        }
+      })
+    })
+
+    return POST(mockRequest)
+  } catch (error) {
+    console.error('Error in GET nav:', error)
     return NextResponse.json(
-      { error: 'Fund ID is required' },
-      { status: 400 }
+      { error: 'Internal server error' },
+      { status: 500 }
     )
   }
-
-  return POST(new NextRequest('http://localhost', {
-    method: 'POST',
-    body: JSON.stringify({
-      fundId,
-      currentPrices: {
-        usdtVnd: usdtVndPrice ? parseFloat(usdtVndPrice) : undefined,
-        btcUsdt: btcUsdtPrice ? parseFloat(btcUsdtPrice) : undefined
-      }
-    })
-  }))
 }
 
 async function calculateRealizedPnL(fundId: string) {

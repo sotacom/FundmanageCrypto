@@ -3,6 +3,8 @@ import { Inter, Source_Serif_4, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { PermissionProvider } from "@/contexts/PermissionContext";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -20,24 +22,12 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  title: "Quản lý Quỹ Crypto - Fund Manager",
+  description: "Hệ thống quản lý quỹ đầu tư crypto với tính năng theo dõi NAV, giao dịch, và phân tích lợi nhuận.",
+  keywords: ["Crypto", "Fund Manager", "Investment", "NAV", "Bitcoin", "USDT"],
+  authors: [{ name: "FundManage Team" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
-  openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
+    icon: "/favicon.ico",
   },
 };
 
@@ -47,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="vi" suppressHydrationWarning>
       <body
         className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground`}
       >
@@ -57,10 +47,15 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <AuthProvider>
+            <PermissionProvider>
+              {children}
+            </PermissionProvider>
+          </AuthProvider>
           <Toaster />
         </ThemeProvider>
       </body>
     </html>
   );
 }
+

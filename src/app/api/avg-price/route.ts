@@ -1,14 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentUser, checkFundAccess } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { fundId, asset } = await request.json()
 
     if (!fundId || !asset) {
       return NextResponse.json(
         { error: 'Fund ID and asset are required' },
         { status: 400 }
+      )
+    }
+
+    // Check fund access (need at least viewer role)
+    const access = await checkFundAccess(user.id, fundId, 'viewer')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền truy cập quỹ này' },
+        { status: 403 }
       )
     }
 
@@ -38,7 +54,7 @@ export async function POST(request: NextRequest) {
     for (const transaction of buyTransactions) {
       const amount = transaction.amount
       const price = transaction.price || 0
-      
+
       totalAmount += amount
       totalCost += amount * price
     }
@@ -62,19 +78,42 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const fundId = searchParams.get('fundId')
-  const asset = searchParams.get('asset')
+  try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  if (!fundId || !asset) {
+    const { searchParams } = new URL(request.url)
+    const fundId = searchParams.get('fundId')
+    const asset = searchParams.get('asset')
+
+    if (!fundId || !asset) {
+      return NextResponse.json(
+        { error: 'Fund ID and asset are required' },
+        { status: 400 }
+      )
+    }
+
+    // Check fund access (need at least viewer role)
+    const access = await checkFundAccess(user.id, fundId, 'viewer')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền truy cập quỹ này' },
+        { status: 403 }
+      )
+    }
+
+    return POST(new NextRequest('http://localhost', {
+      method: 'POST',
+      body: JSON.stringify({ fundId, asset })
+    }))
+  } catch (error) {
+    console.error('Error in GET avg-price:', error)
     return NextResponse.json(
-      { error: 'Fund ID and asset are required' },
-      { status: 400 }
+      { error: 'Internal server error' },
+      { status: 500 }
     )
   }
-
-  return POST(new NextRequest('http://localhost', {
-    method: 'POST',
-    body: JSON.stringify({ fundId, asset })
-  }))
 }

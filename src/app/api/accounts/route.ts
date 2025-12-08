@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentUser, checkFundAccess } from '@/lib/auth-utils'
 
 export async function GET(request: NextRequest) {
     try {
+        // Check authentication
+        const user = await getCurrentUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
         const { searchParams } = new URL(request.url)
         const fundId = searchParams.get('fundId')
         const activeOnly = searchParams.get('activeOnly') === 'true'
@@ -11,6 +18,15 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Fund ID is required' },
                 { status: 400 }
+            )
+        }
+
+        // Check fund access (need at least viewer role)
+        const access = await checkFundAccess(user.id, fundId, 'viewer')
+        if (!access.hasAccess) {
+            return NextResponse.json(
+                { error: 'Bạn không có quyền truy cập quỹ này' },
+                { status: 403 }
             )
         }
 
@@ -63,6 +79,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
+        // Check authentication
+        const user = await getCurrentUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
         const accountData = await request.json()
 
         const {
@@ -78,6 +100,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Missing required fields: fundId, name, type' },
                 { status: 400 }
+            )
+        }
+
+        // Check fund access (need editor role to create accounts)
+        const access = await checkFundAccess(user.id, fundId, 'editor')
+        if (!access.hasAccess) {
+            return NextResponse.json(
+                { error: 'Bạn không có quyền tạo tài khoản trong quỹ này' },
+                { status: 403 }
             )
         }
 
@@ -118,6 +149,12 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
     try {
+        // Check authentication
+        const user = await getCurrentUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
         const accountData = await request.json()
 
         const {
@@ -133,6 +170,15 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Account ID and Fund ID are required' },
                 { status: 400 }
+            )
+        }
+
+        // Check fund access (need editor role to update accounts)
+        const access = await checkFundAccess(user.id, fundId, 'editor')
+        if (!access.hasAccess) {
+            return NextResponse.json(
+                { error: 'Bạn không có quyền chỉnh sửa tài khoản trong quỹ này' },
+                { status: 403 }
             )
         }
 
@@ -175,6 +221,12 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
     try {
+        // Check authentication
+        const user = await getCurrentUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
         const { searchParams } = new URL(request.url)
         const id = searchParams.get('id')
         const fundId = searchParams.get('fundId')
@@ -183,6 +235,15 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Account ID and Fund ID are required' },
                 { status: 400 }
+            )
+        }
+
+        // Check fund access (need editor role to delete accounts)
+        const access = await checkFundAccess(user.id, fundId, 'editor')
+        if (!access.hasAccess) {
+            return NextResponse.json(
+                { error: 'Bạn không có quyền xóa tài khoản trong quỹ này' },
+                { status: 403 }
             )
         }
 

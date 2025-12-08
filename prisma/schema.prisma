@@ -20,10 +20,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// User model - linked to Supabase Auth via id
+model User {
+  id        String   @id // Supabase Auth user ID (UUID)
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Funds owned by this user
+  ownedFunds Fund[]
+  // Funds this user has access to
+  fundAccess FundMember[]
+}
+
+// FundMember - manages fund sharing/delegation
+model FundMember {
+  id        String   @id @default(cuid())
+  fundId    String
+  userId    String
+  role      String   // 'owner' | 'editor' | 'viewer'
+  invitedBy String?  // User ID who invited
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  fund Fund @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([fundId, userId]) // Each user can only have one role per fund
+}
+
 model Fund {
   id          String   @id @default(cuid())
   name        String
   description String?
+  timezone    String   @default("Asia/Ho_Chi_Minh") // IANA timezone (e.g., UTC, Asia/Singapore)
+  
+  // Owner relationship (nullable for migration of existing data)
+  ownerId     String?
+  owner       User?    @relation(fields: [ownerId], references: [id])
   
   // Legacy field (deprecated, keep for migration)
   initialVnd  Float    @default(0)
@@ -42,6 +78,8 @@ model Fund {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  // Fund members with access
+  members      FundMember[]
   accounts     Account[]
   transactions Transaction[]
   assetHoldings AssetHolding[]

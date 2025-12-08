@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { recalculateFund } from '@/lib/fund-calculator'
+import { getCurrentUser, checkFundAccess } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const transactionData = await request.json()
 
     const {
@@ -17,7 +24,8 @@ export async function POST(request: NextRequest) {
       feeCurrency,
       fromLocation,
       toLocation,
-      note
+      note,
+      transactionDate
     } = transactionData
 
     // Validate required fields
@@ -25,6 +33,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields: fundId, type, amount, currency' },
         { status: 400 }
+      )
+    }
+
+    // Check fund access (need editor role to create transactions)
+    const access = await checkFundAccess(user.id, fundId, 'editor')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền tạo giao dịch trong quỹ này' },
+        { status: 403 }
       )
     }
 
@@ -123,7 +140,8 @@ export async function POST(request: NextRequest) {
         feeCurrency: feeCurrency || null,
         fromLocation: fromLocation || null,
         toLocation: toLocation || null,
-        note: note || null
+        note: note || null,
+        createdAt: transactionDate ? new Date(transactionDate) : new Date()
       }
     })
 
@@ -147,6 +165,12 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const transactionData = await request.json()
 
     const {
@@ -161,13 +185,23 @@ export async function PUT(request: NextRequest) {
       feeCurrency,
       fromLocation,
       toLocation,
-      note
+      note,
+      transactionDate
     } = transactionData
 
     if (!id || !fundId) {
       return NextResponse.json(
         { error: 'Transaction ID and Fund ID are required' },
         { status: 400 }
+      )
+    }
+
+    // Check fund access (need editor role to update transactions)
+    const access = await checkFundAccess(user.id, fundId, 'editor')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền chỉnh sửa giao dịch trong quỹ này' },
+        { status: 403 }
       )
     }
 
@@ -184,7 +218,8 @@ export async function PUT(request: NextRequest) {
         feeCurrency: feeCurrency || null,
         fromLocation: fromLocation || null,
         toLocation: toLocation || null,
-        note: note || null
+        note: note || null,
+        createdAt: transactionDate ? new Date(transactionDate) : undefined
       }
     })
 
@@ -208,6 +243,12 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const fundId = searchParams.get('fundId')
@@ -216,6 +257,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(
         { error: 'Transaction ID and Fund ID are required' },
         { status: 400 }
+      )
+    }
+
+    // Check fund access (need editor role to delete transactions)
+    const access = await checkFundAccess(user.id, fundId, 'editor')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền xóa giao dịch trong quỹ này' },
+        { status: 403 }
       )
     }
 
@@ -243,6 +293,12 @@ export async function DELETE(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const fundId = searchParams.get('fundId')
     const limit = parseInt(searchParams.get('limit') || '50')
@@ -252,6 +308,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Fund ID is required' },
         { status: 400 }
+      )
+    }
+
+    // Check fund access (need at least viewer role)
+    const access = await checkFundAccess(user.id, fundId, 'viewer')
+    if (!access.hasAccess) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền xem giao dịch của quỹ này' },
+        { status: 403 }
       )
     }
 

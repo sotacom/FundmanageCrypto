@@ -1,23 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentUser, checkFundAccess } from '@/lib/auth-utils'
 
 /**
  * Accounting Reports API - Vietnamese Standards (VAS)
  * Provides balance sheet and income statement data
+ * Requires at least viewer access
  */
 
 export async function GET(request: NextRequest) {
-    const { searchParams } = new URL(request.url)
-    const fundId = searchParams.get('fundId')
-
-    if (!fundId) {
-        return NextResponse.json(
-            { error: 'Fund ID is required' },
-            { status: 400 }
-        )
-    }
-
     try {
+        // Check authentication
+        const user = await getCurrentUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const { searchParams } = new URL(request.url)
+        const fundId = searchParams.get('fundId')
+
+        if (!fundId) {
+            return NextResponse.json(
+                { error: 'Fund ID is required' },
+                { status: 400 }
+            )
+        }
+
+        // Check fund access (need at least viewer role)
+        const access = await checkFundAccess(user.id, fundId, 'viewer')
+        if (!access.hasAccess) {
+            return NextResponse.json(
+                { error: 'Bạn không có quyền truy cập quỹ này' },
+                { status: 403 }
+            )
+        }
+
         // Fetch fund with equity
         const fund = await db.fund.findUnique({
             where: { id: fundId },
