@@ -17,18 +17,20 @@ Sử dụng checklist này để đảm bảo deployment thành công.
 - [ ] Lấy database connection string:
   - [ ] Settings → Database → Connection String (URI)
   - [ ] Copy và thay `[YOUR-PASSWORD]` bằng password thực
-  - [ ] Format: `postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres`
+- [ ] Lấy Supabase Auth keys:
+  - [ ] Settings → API → Project URL
+  - [ ] Settings → API → anon public key
+  - [ ] Settings → API → service_role secret
 
 ### GitHub Repository
 - [ ] Code đã được commit
 - [ ] Code đã được push lên GitHub
-- [ ] Repository tên: `FundmanageCrypto` (hoặc tên khác)
-- [ ] Branch chính: `main` hoặc `master`
+- [ ] Branch chính: `main`
 
 ### Local Verification
 - [ ] Build thành công locally:
   ```bash
-  NODE_ENV=production npm run build
+  npm run build
   ```
 - [ ] Không có TypeScript errors
 - [ ] Không có build errors
@@ -48,24 +50,22 @@ Sử dụng checklist này để đảm bảo deployment thành công.
 - [ ] Tìm và select repository `FundmanageCrypto`
 - [ ] Click "Import"
 
-### Configure Deployment Settings
-- [ ] **Framework Preset**: Verify là "Next.js"
-- [ ] **Root Directory**: Giữ mặc định `./`
-- [ ] **Build Command**: Verify là `npm run build` hoặc để trống
-- [ ] **Install Command**: Verify là `npm install` hoặc để trống
-- [ ] Không cần thay đổi gì (đã có trong `vercel.json`)
-
-### Environment Variables
+### Environment Variables (QUAN TRỌNG)
 - [ ] Click tab "Environment Variables"
 - [ ] Add biến `DATABASE_URL`:
   - **Name**: `DATABASE_URL`
   - **Value**: `postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres`
-  - **Environments**: Select tất cả (Production, Preview, Development)
+- [ ] Add biến `NEXT_PUBLIC_SUPABASE_URL`:
+  - **Name**: `NEXT_PUBLIC_SUPABASE_URL`
+  - **Value**: `https://xxxxx.supabase.co`
+- [ ] Add biến `NEXT_PUBLIC_SUPABASE_ANON_KEY`:
+  - **Name**: `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - **Value**: `eyJhbGc...` (anon key từ Supabase)
+- [ ] Add biến `SUPABASE_SERVICE_ROLE_KEY`:
+  - **Name**: `SUPABASE_SERVICE_ROLE_KEY`
+  - **Value**: `eyJhbGc...` (service role key từ Supabase)
+- [ ] Select tất cả environments: **Production**, **Preview**, **Development**
 - [ ] Click "Save"
-- [ ] (Optional) Add connection pooling:
-  ```
-  postgresql://...?pgbouncer=true&connection_limit=1
-  ```
 
 ### Deploy
 - [ ] Click "Deploy" button
@@ -84,9 +84,8 @@ Sử dụng checklist này để đảm bảo deployment thành công.
 - [ ] "Deployment successful" - ✅
 
 ### Application Verification
-- [ ] Vercel provide URL deployment (example: `https://fundmanage-crypto.vercel.app`)
-- [ ] Click vào URL
-- [ ] Application loads successfully
+- [ ] Click vào deployment URL
+- [ ] Trang Login hiển thị
 - [ ] Không có errors trong browser console
 
 ---
@@ -95,28 +94,28 @@ Sử dụng checklist này để đảm bảo deployment thành công.
 
 ### Initialize Database Schema
 
-**Option 1: Từ Local Machine (Recommended)**
-- [ ] Create file `.env` local với production DATABASE_URL:
+**Từ Local Machine:**
+- [ ] Set production DATABASE_URL trong terminal:
   ```bash
-  DATABASE_URL="postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres"
+  export DATABASE_URL="postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres"
   ```
 - [ ] Run migration:
   ```bash
-  npm run db:push
+  npx prisma db push
+  ```
+  Hoặc reset hoàn toàn:
+  ```bash
+  npx prisma db push --force-reset
   ```
 - [ ] Verify output: "Your database is now in sync"
-
-**Option 2: Using Vercel CLI**
-- [ ] Install Vercel CLI: `npm i -g vercel`
-- [ ] Link project: `vercel link`
-- [ ] Pull env vars: `vercel env pull`
-- [ ] Run migration: `npm run db:push`
 
 ### Verify Database Tables
 - [ ] Mở Supabase dashboard
 - [ ] Click "Table Editor"
-- [ ] Verify 5 tables đã được tạo:
+- [ ] Verify tables đã được tạo:
+  - [ ] `User`
   - [ ] `Fund`
+  - [ ] `FundMember`
   - [ ] `Account`
   - [ ] `Transaction`
   - [ ] `AssetHolding`
@@ -126,44 +125,42 @@ Sử dụng checklist này để đảm bảo deployment thành công.
 
 ## ✨ POST-DEPLOYMENT
 
-### Test Application Functions
-- [ ] Initialize fund:
-  ```bash
-  curl https://YOUR-VERCEL-URL.vercel.app/api/init -X POST
-  ```
-- [ ] Response có `"success": true`
-- [ ] Verify fund created trong Supabase Table Editor
-
-### Test via UI
+### Test Authentication
 - [ ] Mở production URL trong browser
-- [ ] Dashboard loads correctly
-- [ ] Try tạo transaction mới
-- [ ] Verify transaction xuất hiện trong UI
-- [ ] Check Supabase dashboard → `Transaction` table có data mới
+- [ ] Click "Đăng ký" để tạo account mới
+- [ ] Nhập email và password
+- [ ] Verify email (nếu Supabase bật email confirmation)
+- [ ] Đăng nhập thành công
 
-### Performance Check
-- [ ] Page load speed acceptable (< 3s)
-- [ ] API calls work correctly
-- [ ] Live prices updating (USDT/VND, BTC/USDT)
-- [ ] No console errors
+### Test Fund Creation
+- [ ] Sau khi đăng nhập, click "Tạo quỹ mới"
+- [ ] Nhập tên quỹ
+- [ ] Chọn múi giờ (default: Asia/Ho_Chi_Minh)
+- [ ] Click tạo
+- [ ] Verify quỹ xuất hiện trong dropdown
+
+### Test Transaction
+- [ ] Tạo giao dịch mới (ví dụ: Góp vốn)
+- [ ] Chọn ngày giờ giao dịch
+- [ ] Submit thành công
+- [ ] Verify transaction xuất hiện trong lịch sử
+- [ ] Verify ngày giờ hiển thị đúng theo múi giờ quỹ
+
+### Test Fund Settings
+- [ ] Mở tab "Cài đặt"
+- [ ] Verify múi giờ hiển thị (ví dụ: "(UTC+7) Việt Nam")
+- [ ] Click edit để thay đổi múi giờ (optional)
+- [ ] Verify transaction dates update theo múi giờ mới
 
 ---
 
-## 🔒 SECURITY & MONITORING
+## 🔒 SECURITY CHECKLIST
 
-### Security Checklist
 - [ ] `.env` file KHÔNG được commit vào Git
 - [ ] Database password KHÔNG được share publicly
+- [ ] Supabase keys KHÔNG được share publicly
 - [ ] Connection string chỉ lưu trong Vercel environment variables
 - [ ] GitHub repository có thể là private (recommended)
-
-### Monitoring Setup
-- [ ] Check Vercel Analytics (nếu enable)
-- [ ] Check Supabase dashboard:
-  - [ ] Database size (free tier: 500MB max)
-  - [ ] Active connections
-  - [ ] Query performance
-- [ ] Setup alerts cho database size limits (optional)
 
 ---
 
@@ -177,46 +174,15 @@ Sử dụng checklist này để đảm bảo deployment thành công.
   - [ ] Verify Vercel tự động trigger deployment
   - [ ] Check deployment successful
 
-### Workflow
-```bash
-# Local
-git add .
-git commit -m "Your message"
-git push origin main
-
-# Vercel tự động:
-# ✅ Detect commit
-# ✅ Run build
-# ✅ Deploy to production
-```
-
----
-
-## 🎯 OPTIONAL ENHANCEMENTS
-
-### Custom Domain (Optional)
-- [ ] Purchase domain (ví dụ: `fundmanage.vn`)
-- [ ] Add domain trong Vercel:
-  - [ ] Project Settings → Domains
-  - [ ] Add domain và configure DNS
-  - [ ] Vercel tự động provision SSL certificate
-
-### Database Backups
-- [ ] Verify Supabase auto backup enabled (mặc định: 7 ngày)
-- [ ] Consider manual backup cho production data
-- [ ] Test restore process (optional)
-
----
-
-## 🆘 TROUBLESHOOTING
-
-Nếu có vấn đề, xem [DEPLOYMENT.md - Troubleshooting section](./DEPLOYMENT.md#-troubleshooting):
-
-Common issues:
-- ❌ Build error: Check build logs
-- ❌ Database connection error: Verify DATABASE_URL
-- ❌ Prisma client not generated: Check postinstall script ran
-- ❌ Performance slow: Enable connection pooling
+### Database Schema Changes
+- [ ] Sau khi push code mới với schema changes:
+  ```bash
+  # Sync schema (giữ data nếu có thể)
+  DATABASE_URL="postgresql://..." npx prisma db push
+  
+  # Hoặc reset hoàn toàn (xóa data)
+  DATABASE_URL="postgresql://..." npx prisma db push --force-reset
+  ```
 
 ---
 
@@ -224,8 +190,10 @@ Common issues:
 
 - [ ] All checks above passed
 - [ ] Application accessible via Vercel URL
+- [ ] Authentication working (login/signup)
 - [ ] Database connected and working
-- [ ] Can create and view transactions
+- [ ] Can create funds and transactions
+- [ ] Timezone hiển thị đúng
 - [ ] Auto-deploy working on git push
 
 🎉 **DEPLOYMENT SUCCESSFUL!**
@@ -234,9 +202,11 @@ Common issues:
 
 **Database**: Supabase (Singapore region)
 
+**Authentication**: Supabase Auth
+
 **Next steps**:
-1. Share URL with users
-2. Monitor performance and usage
+1. Share URL với users
+2. Monitor performance và usage
 3. Setup custom domain (optional)
 4. Regular database backups
 
@@ -247,6 +217,5 @@ Common issues:
 **Deployed By**: _______________
 
 **Notes**:
-_____________________________________________________
 _____________________________________________________
 _____________________________________________________

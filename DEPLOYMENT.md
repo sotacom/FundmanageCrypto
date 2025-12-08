@@ -1,6 +1,6 @@
 # Hướng Dẫn Deploy Lên Vercel với Supabase
 
-Tài liệu này hướng dẫn chi tiết cách deploy ứng dụng FundmanageCrypto lên Vercel và sử dụng Supabase làm database.
+Tài liệu này hướng dẫn chi tiết cách deploy ứng dụng FundmanageCrypto lên Vercel và sử dụng Supabase làm database + authentication.
 
 ## 📋 Điều Kiện Tiên Quyết
 
@@ -15,7 +15,7 @@ Tài liệu này hướng dẫn chi tiết cách deploy ứng dụng FundmanageC
 
 ---
 
-## 🗄️ Bước 1: Setup Supabase Database
+## 🗄️ Bước 1: Setup Supabase
 
 ### 1.1. Tạo Supabase Project
 
@@ -30,7 +30,7 @@ Tài liệu này hướng dẫn chi tiết cách deploy ứng dụng FundmanageC
 5. Đợi 2-3 phút để Supabase khởi tạo
 
 > [!TIP]
-> Xem hướng dẫn chi tiết tại [docs/SUPABASE_SETUP.md](file:///Users/sotacom/Documents/Coding/FundmanageCrypto/docs/SUPABASE_SETUP.md)
+> Xem hướng dẫn chi tiết tại [docs/SUPABASE_SETUP.md](./docs/SUPABASE_SETUP.md)
 
 ### 1.2. Lấy Database Connection String
 
@@ -44,13 +44,28 @@ Tài liệu này hướng dẫn chi tiết cách deploy ứng dụng FundmanageC
    ```
 6. Thay `[YOUR-PASSWORD]` bằng password bạn đã tạo ở bước 1.1
 
+### 1.3. Lấy Supabase Auth Keys (BẮT BUỘC)
+
+1. Trong Supabase dashboard, click **Settings** ⚙️
+2. Click **API** trong menu bên trái
+3. Copy các giá trị sau:
+   - **Project URL**: `https://xxxxx.supabase.co`
+   - **anon public key**: `eyJhbGc...` (dài)
+   - **service_role secret**: `eyJhbGc...` (dài, KHÔNG share)
+
 > [!WARNING]
-> **Bảo Mật Connection String**
-> - ⚠️ KHÔNG share connection string công khai
-> - ⚠️ KHÔNG commit vào code
+> **Bảo Mật Keys**
+> - ⚠️ KHÔNG share `service_role` key công khai
+> - ⚠️ KHÔNG commit keys vào code
 > - ✅ Chỉ lưu trong Vercel environment variables
 
-**Lưu connection string này lại**, bạn sẽ cần nó ở bước 3.
+### 1.4. Enable Auth Providers (Optional)
+
+1. Supabase Dashboard → **Authentication** → **Providers**
+2. Enable các providers muốn dùng:
+   - **Email**: Enabled by default
+   - **Google**: Configure với Google Cloud credentials
+   - **GitHub**: Configure với GitHub OAuth app
 
 ---
 
@@ -86,36 +101,33 @@ npm install
 prisma generate && next build
 ```
 
-> [!NOTE]
-> Build command đã được cấu hình sẵn trong `vercel.json` và `package.json`, nhưng bạn có thể override tại đây nếu cần.
-
 ---
 
 ## 🔑 Bước 3: Configure Environment Variables
 
-### 3.1. Add DATABASE_URL
+### 3.1. Required Environment Variables
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `DATABASE_URL` | `postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres` | Database connection |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxxxx.supabase.co` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJhbGc...` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | `eyJhbGc...` | Supabase service role key |
+
+### 3.2. Add Variables to Vercel
 
 1. Trong Vercel project settings, click tab **"Environment Variables"**
-2. Add biến môi trường:
+2. Add từng biến môi trường như bảng trên
+3. Chọn tất cả environments: **Production**, **Preview**, và **Development**
+4. Click **"Save"**
 
-| Name | Value | Environment |
-|------|-------|-------------|
-| `DATABASE_URL` | `postgresql://postgres:YOUR-PASSWORD@db.xxxxx.supabase.co:5432/postgres` | Production, Preview, Development |
+### 3.3. Optional: Connection Pooling
 
-3. Paste connection string từ Bước 1.2 vào **Value**
-4. Chọn tất cả environments: **Production**, **Preview**, và **Development**
-5. Click **"Save"**
-
-### 3.2. Optional: Add Connection Pooling
-
-Để tối ưu performance trong production, thêm connection pooling:
+Để tối ưu performance trong production:
 
 ```
-postgresql://postgres:YOUR-PASSWORD@db.xxxxx.supabase.co:5432/postgres?pgbouncer=true&connection_limit=1
+postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres?pgbouncer=true&connection_limit=1
 ```
-
-> [!TIP]
-> Connection pooling giúp quản lý kết nối database hiệu quả hơn, đặc biệt với serverless functions.
 
 ---
 
@@ -144,7 +156,7 @@ postgresql://postgres:YOUR-PASSWORD@db.xxxxx.supabase.co:5432/postgres?pgbouncer
 > Nếu build **fail**, check logs để tìm lỗi. Thường là:
 > - Missing environment variables
 > - Wrong DATABASE_URL format
-> - TypeScript errors (nếu đã bật checking)
+> - TypeScript errors
 
 ---
 
@@ -152,43 +164,30 @@ postgresql://postgres:YOUR-PASSWORD@db.xxxxx.supabase.co:5432/postgres?pgbouncer
 
 Sau khi deploy thành công, cần push schema lên Supabase:
 
-### 5.1. Option A: Từ Local Machine (Recommended)
+### 5.1. Reset và Khởi Tạo Database (Fresh Install)
 
-1. Tạo file `.env` trong project local:
-   ```bash
-   DATABASE_URL="postgresql://postgres:YOUR-PASSWORD@db.xxxxx.supabase.co:5432/postgres"
-   ```
+```bash
+# Từ local machine với production DATABASE_URL
+DATABASE_URL="postgresql://..." npx prisma db push --force-reset
+```
 
-2. Push schema lên Supabase:
-   ```bash
-   npm run db:push
-   ```
+### 5.2. Update Schema (Giữ Data)
 
-3. Verify trong Supabase dashboard:
-   - Click **Table Editor**
-   - Bạn sẽ thấy các tables: `Fund`, `Account`, `Transaction`, `AssetHolding`, `Fee`
+```bash
+# Chỉ sync schema, không xóa dữ liệu
+DATABASE_URL="postgresql://..." npx prisma db push
+```
 
-### 5.2. Option B: Sử dụng Vercel CLI
+### 5.3. Verify Tables
 
-1. Install Vercel CLI:
-   ```bash
-   npm i -g vercel
-   ```
-
-2. Link project:
-   ```bash
-   vercel link
-   ```
-
-3. Pull environment variables:
-   ```bash
-   vercel env pull
-   ```
-
-4. Run migration:
-   ```bash
-   npm run db:push
-   ```
+Trong Supabase dashboard → **Table Editor**, verify các tables:
+- `User`
+- `Fund`
+- `FundMember`
+- `Account`
+- `Transaction`
+- `AssetHolding`
+- `Fee`
 
 ---
 
@@ -196,41 +195,22 @@ Sau khi deploy thành công, cần push schema lên Supabase:
 
 ### 6.1. Test Application
 
-1. Vercel sẽ cung cấp URL deployment, ví dụ:
-   ```
-   https://fundmanage-crypto.vercel.app
-   ```
+1. Mở URL deployment (ví dụ: `https://fundmanage-crypto.vercel.app`)
+2. Bạn sẽ thấy trang **Login**
+3. **Đăng ký tài khoản mới** hoặc đăng nhập
 
-2. Mở URL trong browser
+### 6.2. Test Authentication Flow
 
-3. Initialize fund đầu tiên:
-   ```bash
-   curl https://fundmanage-crypto.vercel.app/api/init -X POST
-   ```
+1. Click **"Đăng ký"**
+2. Nhập email và password
+3. Check email để verify (nếu Supabase bật email confirmation)
+4. Đăng nhập với tài khoản vừa tạo
 
-   **Expected response**:
-   ```json
-   {
-     "success": true,
-     "message": "Empty fund initialized successfully",
-     "fundId": "clxxxx..."
-   }
-   ```
+### 6.3. Test Fund Creation
 
-### 6.2. Verify Data in Supabase
-
-1. Quay lại Supabase dashboard
-2. Click **Table Editor** → `Fund`
-3. Bạn sẽ thấy fund vừa tạo
-4. Click `Account` → Thấy 2 accounts (Binance, Ví lạnh)
-
-### 6.3. Test Basic Operations
-
-Thử tạo một transaction:
-1. Truy cập app UI
-2. Nhập data vào form
-3. Submit
-4. Check Supabase dashboard để verify data đã lưu
+1. Sau khi đăng nhập, tạo quỹ đầu tiên
+2. Chọn timezone (default: Asia/Ho_Chi_Minh)
+3. Thêm giao dịch với ngày giờ tùy chỉnh
 
 🎉 **Thành công!** App đã được deploy và hoạt động trên production.
 
@@ -246,22 +226,6 @@ Vercel tự động deploy khi bạn push code:
 2. **Other branches** → Deploys to **Preview** (staging URL)
 3. **Pull requests** → Deploys to temporary **Preview** environment
 
-### Deploy Process
-
-```bash
-# Local development
-git add .
-git commit -m "Add new feature"
-git push origin main
-
-# Vercel tự động:
-# 1. Detect new commit
-# 2. Trigger build
-# 3. Run tests (nếu có)
-# 4. Deploy to production
-# 5. Invalidate cache
-```
-
 ### Database Migrations
 
 Khi có thay đổi schema:
@@ -272,15 +236,13 @@ Khi có thay đổi schema:
    npm run db:push
    ```
 3. Push code lên GitHub
-4. Vercel sẽ tự động deploy code mới
-5. **Manually** run migration on production database:
+4. **Manually** run migration on production:
    ```bash
-   # Option 1: Từ local với production DATABASE_URL
-   DATABASE_URL="postgresql://..." npm run db:push
+   # Option 1: Reset hoàn toàn (xóa data)
+   DATABASE_URL="postgresql://..." npx prisma db push --force-reset
    
-   # Option 2: Sử dụng Vercel CLI
-   vercel env pull
-   npm run db:push
+   # Option 2: Chỉ sync schema (giữ data nếu có thể)
+   DATABASE_URL="postgresql://..." npm run db:push
    ```
 
 > [!CAUTION]
@@ -300,105 +262,65 @@ Khi có thay đổi schema:
 **Giải pháp**:
 1. Check Vercel environment variables
 2. Verify connection string format
-3. Test connection từ local:
-   ```bash
-   npm run db:verify
-   ```
+3. Test connection từ local
 
-### ❌ Build Error: "Prisma Client not generated"
+### ❌ Auth Error: "Invalid API Key"
 
-**Nguyên nhân**: `postinstall` script không chạy hoặc fail.
+**Nguyên nhân**: Supabase keys không đúng.
 
 **Giải pháp**:
-1. Verify `package.json` có `postinstall` script
-2. Check build logs để xem `prisma generate` có chạy không
-3. Manually override build command trong Vercel:
-   ```bash
-   prisma generate && next build
-   ```
+1. Verify `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+2. Check keys trong Supabase → Settings → API
+3. Ensure không có extra spaces trong keys
 
-### ❌ Runtime Error: "P1001 - Can't reach database"
+### ❌ Runtime Error: "User not authenticated"
 
-**Nguyên nhân**: Serverless function không thể kết nối Supabase.
+**Nguyên nhân**: Auth middleware không hoạt động.
 
 **Giải pháp**:
-1. Check `DATABASE_URL` trong production environment
-2. Thêm connection pooling:
-   ```
-   ?pgbouncer=true&connection_limit=1
-   ```
-3. Verify Supabase project status (có thể đang maintenance)
+1. Verify middleware.ts đang handle auth routes đúng
+2. Check Supabase auth cookies
+3. Clear browser cookies và thử lại
 
-### ❌ Performance Issue: Slow Database Queries
+### ❌ Timezone không hiển thị đúng
+
+**Nguyên nhân**: Fund chưa có timezone hoặc schema cũ.
 
 **Giải pháp**:
-1. Enable connection pooling (xem bước 3.2)
-2. Add database indexes trong Supabase:
-   ```sql
-   CREATE INDEX idx_transaction_fundId ON "Transaction"("fundId");
-   CREATE INDEX idx_assetholding_fundId ON "AssetHolding"("fundId");
-   ```
-3. Consider upgrading Supabase plan nếu cần
-
-### 🐛 Debugging Tips
-
-**View Logs**:
-- Vercel Dashboard → Project → Deployments → Click deployment → Logs
-- Real-time logs cho functions và build process
-
-**Check Environment**:
-```bash
-vercel env ls
-```
-
-**Test Production Build Locally**:
-```bash
-npm run build
-npm run start
-```
+1. Run `npm run db:push` để sync schema mới
+2. Default timezone là `Asia/Ho_Chi_Minh`
+3. Có thể thay đổi trong Settings của mỗi quỹ
 
 ---
 
 ## 🔒 Security Best Practices
 
 ### Environment Variables
-- ✅ Lưu `DATABASE_URL` trong Vercel environment variables
+- ✅ Lưu tất cả secrets trong Vercel environment variables
 - ✅ Không commit `.env` files vào Git
-- ✅ Use different databases cho dev/staging/production
+- ✅ Use different Supabase projects cho dev/staging/production
+
+### Authentication
+- ✅ Supabase Auth với email/password hoặc OAuth
+- ✅ Role-based access control (Owner/Editor/Viewer)
+- ✅ Protected API routes với middleware
 
 ### Database Access
-- ✅ Enable RLS (Row Level Security) trong Supabase if needed
-- ✅ Create read-only user nếu cần analytics access
-- ✅ Regularly review Supabase access logs
-
-### Supabase Security
-- ✅ Enable database backups (auto trong free plan: 7 days)
-- ✅ Use SSL connections (mặc định trong connection string)
-- ✅ Monitor database performance trong Supabase dashboard
+- ✅ Row-level access control qua FundMember table
+- ✅ Only fund members có thể access fund data
+- ✅ Owner-only operations (delete fund, manage members)
 
 ---
 
 ## 📊 Monitoring & Maintenance
 
 ### Vercel Analytics
-1. Enable trong Project Settings → Analytics
-2. Monitor:
-   - Page views
-   - Function invocations
-   - Performance metrics
-   - Error rates
+- Enable trong Project Settings → Analytics
+- Monitor page views, function invocations, error rates
 
 ### Supabase Monitoring
-1. Dashboard → Database → Performance
-2. Check:
-   - Database size (free: 500MB)
-   - Active connections
-   - Query performance
-   - Bandwidth usage
-
-### Alerts Setup
-- Setup alerts trong Supabase cho database size limits
-- Monitor Vercel function execution limits (free: 100GB-hours/month)
+- Dashboard → Database → Performance
+- Check database size, connections, query performance
 
 ---
 
@@ -409,89 +331,21 @@ npm run start
 - ✅ 100GB bandwidth/month
 - ✅ 100GB-Hrs serverless function execution
 - ✅ Automatic HTTPS
-- ⚠️ No commercial usage without Pro plan
 
 ### Supabase Free Tier
 - ✅ 500MB database storage
-- ✅ 1GB file storage
-- ✅ 50MB bandwidth/day
-- ✅ 500K Edge Function invocations
-- ✅ 7-day log retention
-- ✅ Auto backups (7 days)
-
-> [!TIP]
-> Free tiers là đủ cho MVP và small-scale applications. Nâng cấp khi cần scale.
-
----
-
-## 🚀 Advanced: Custom Domain
-
-### Add Custom Domain to Vercel
-
-1. Vercel Dashboard → Project → Settings → Domains
-2. Add domain (ví dụ: `fundmanage.vn`)
-3. Configure DNS records theo hướng dẫn Vercel:
-   ```
-   Type: A
-   Name: @
-   Value: 76.76.21.21
-   
-   Type: CNAME
-   Name: www
-   Value: cname.vercel-dns.com
-   ```
-4. Vercel tự động provision SSL certificate (Let's Encrypt)
+- ✅ 50,000 monthly active users (Auth)
+- ✅ 500MB file storage
+- ✅ 7-day database backup retention
 
 ---
 
 ## 📚 Resources
 
 - [Vercel Documentation](https://vercel.com/docs)
-- [Next.js Deployment](https://nextjs.org/docs/deployment)
+- [Supabase Auth Docs](https://supabase.com/docs/guides/auth)
 - [Prisma with PostgreSQL](https://www.prisma.io/docs/concepts/database-connectors/postgresql)
-- [Supabase Docs](https://supabase.com/docs)
-- [Project Supabase Setup Guide](file:///Users/sotacom/Documents/Coding/FundmanageCrypto/docs/SUPABASE_SETUP.md)
-
----
-
-## 📝 Deployment Checklist
-
-Copy checklist này để track progress:
-
-### Pre-Deployment
-- [ ] Supabase project created
-- [ ] Database password saved securely
-- [ ] Connection string obtained
-- [ ] GitHub repository ready
-- [ ] Code pushed to main branch
-
-### Vercel Setup
-- [ ] Vercel account created
-- [ ] Project imported from GitHub
-- [ ] `DATABASE_URL` environment variable configured
-- [ ] Build settings verified
-
-### Deployment
-- [ ] First deployment successful
-- [ ] Build logs checked (no errors)
-- [ ] Deployment URL accessible
-
-### Database
-- [ ] Schema pushed to Supabase (`npm run db:push`)
-- [ ] Tables visible in Supabase dashboard
-- [ ] Initial data seeded (if needed)
-
-### Verification
-- [ ] Application loads correctly
-- [ ] Can create fund/transaction
-- [ ] Data persists in Supabase
-- [ ] No console errors
-
-### Post-Deployment
-- [ ] Custom domain configured (optional)
-- [ ] Analytics enabled
-- [ ] Monitoring setup
-- [ ] Backup strategy verified
+- [Project Supabase Setup Guide](./docs/SUPABASE_SETUP.md)
 
 ---
 
