@@ -11,9 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InfoIcon, Loader2, Download, Upload, AlertTriangle, CheckCircle2, Database, Pencil } from 'lucide-react'
-import { parseBackupFile, getLastBackupTimestamp, formatBackupTimestamp } from '@/lib/backup-utils'
+import { parseBackupFile, getLastBackupTimestamp, formatBackupTimestamp, checkBackupCompatibility } from '@/lib/backup-utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { COMMON_TIMEZONES } from '@/lib/timezone-utils'
+import { COMMON_TIMEZONES, DEFAULT_TIMEZONE } from '@/lib/timezone-utils'
 import type { BackupData } from '@/lib/backup-utils'
 
 interface FundSettingsProps {
@@ -48,6 +48,8 @@ export default function FundSettings({ fundId, fundName, fundDescription, fundTi
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [restoreError, setRestoreError] = useState<string | null>(null)
     const [restoreSuccess, setRestoreSuccess] = useState(false)
+    const [restoreTimezone, setRestoreTimezone] = useState(DEFAULT_TIMEZONE) // For v1.0 backup restore
+    const [backupNeedsTimezone, setBackupNeedsTimezone] = useState(false) // v1.0 backup flag
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Sync internal state when prop changes (after successful save & refresh)
@@ -196,6 +198,11 @@ export default function FundSettings({ fundId, fundName, fundDescription, fundTi
         try {
             const data = await parseBackupFile(file)
             setBackupPreview(data)
+
+            // Check if this is a v1.0 backup that needs timezone selection
+            const compatibility = checkBackupCompatibility(data.version)
+            setBackupNeedsTimezone(compatibility.needsTimezone || false)
+
             setShowRestoreDialog(true)
             setConfirmDelete(false)
         } catch (error) {
@@ -221,7 +228,8 @@ export default function FundSettings({ fundId, fundName, fundDescription, fundTi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     targetFundId: fundId,  // Use current fund as target
-                    backupData: backupPreview
+                    backupData: backupPreview,
+                    timezone: backupNeedsTimezone ? restoreTimezone : undefined // Only for v1.0 backups
                 })
             })
 
@@ -623,6 +631,30 @@ export default function FundSettings({ fundId, fundName, fundDescription, fundTi
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Timezone Selection for v1.0 backups */}
+                            {backupNeedsTimezone && (
+                                <div className="border rounded-lg p-4 border-orange-500/50 bg-orange-50 dark:bg-orange-950/30">
+                                    <p className="text-sm font-semibold mb-2 text-orange-700 dark:text-orange-400">
+                                        ⚠️ Backup phiên bản cũ (1.0) - Cần chọn múi giờ
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mb-3">
+                                        Backup này chưa có thông tin múi giờ. Vui lòng chọn múi giờ cho các giao dịch.
+                                    </p>
+                                    <Select value={restoreTimezone} onValueChange={setRestoreTimezone}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Chọn múi giờ" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {COMMON_TIMEZONES.map((tz) => (
+                                                <SelectItem key={tz.value} value={tz.value}>
+                                                    {tz.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
 
                             {/* Warning */}
                             <Alert variant="destructive">

@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
             id: fund.id,
             name: fund.name,
             description: fund.description,
+            timezone: fund.timezone, // v2.0: Added timezone
             initialVnd: fund.initialVnd,
             initialCapital: fund.initialCapital,
             additionalCapital: fund.additionalCapital,

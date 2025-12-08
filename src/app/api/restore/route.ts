@@ -33,9 +33,10 @@ export async function POST(request: NextRequest) {
 
         // Parse request body
         const body = await request.json()
-        const { targetFundId, backupData: rawBackupData } = body as {
+        const { targetFundId, backupData: rawBackupData, timezone } = body as {
             targetFundId: string
             backupData: BackupData
+            timezone?: string  // Required for v1.0 backups
         }
 
         // If targetFundId is provided, use it; otherwise fall back to backup's fundId
@@ -64,6 +65,18 @@ export async function POST(request: NextRequest) {
         if (!compatibility.compatible) {
             return NextResponse.json(
                 { error: compatibility.warning },
+                { status: 400 }
+            )
+        }
+
+        // For v1.0 backups, timezone is required
+        const backupTimezone = (rawBackupData.data.fund as any).timezone || timezone
+        if (compatibility.needsTimezone && !backupTimezone) {
+            return NextResponse.json(
+                {
+                    error: 'Backup phiên bản cũ (1.0) cần chọn múi giờ',
+                    needsTimezone: true
+                },
                 { status: 400 }
             )
         }
@@ -130,6 +143,7 @@ export async function POST(request: NextRequest) {
                 data: {
                     name: rawBackupData.data.fund.name,
                     description: rawBackupData.data.fund.description,
+                    timezone: backupTimezone || 'Asia/Ho_Chi_Minh', // v2.0: Use backup timezone or provided timezone
                     initialVnd: rawBackupData.data.fund.initialVnd,
                     initialCapital: rawBackupData.data.fund.initialCapital,
                     additionalCapital: rawBackupData.data.fund.additionalCapital,

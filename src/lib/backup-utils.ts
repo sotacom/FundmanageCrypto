@@ -2,8 +2,10 @@ import type { Fund, Account, Transaction, AssetHolding, Fee } from '@prisma/clie
 
 /**
  * Current backup format version
+ * v1.0.0 - Original format without timezone
+ * v2.0.0 - Added timezone field to fund
  */
-export const BACKUP_VERSION = '1.0.0'
+export const BACKUP_VERSION = '2.0.0'
 
 /**
  * Backup data structure
@@ -77,26 +79,31 @@ export function validateBackupFile(data: any): { valid: boolean; error?: string 
 
 /**
  * Check if backup version is compatible with current version
+ * Version 2.0 accepts both v1.x and v2.x backups
  */
-export function checkBackupCompatibility(version: string): { compatible: boolean; warning?: string } {
-    const currentMajor = parseInt(BACKUP_VERSION.split('.')[0])
+export function checkBackupCompatibility(version: string): {
+    compatible: boolean
+    warning?: string
+    needsTimezone?: boolean  // v1.x backups need timezone input
+} {
     const backupMajor = parseInt(version.split('.')[0])
 
-    if (backupMajor !== currentMajor) {
-        return {
-            compatible: false,
-            warning: `Backup version ${version} is not compatible with current version ${BACKUP_VERSION}. Major version mismatch.`
+    // Accept v1.x and v2.x
+    if (backupMajor === 1 || backupMajor === 2) {
+        if (backupMajor === 1) {
+            return {
+                compatible: true,
+                warning: `Backup phiên bản ${version} (cũ) sẽ được chuyển đổi sang phiên bản ${BACKUP_VERSION}`,
+                needsTimezone: true
+            }
         }
+        return { compatible: true }
     }
 
-    if (version !== BACKUP_VERSION) {
-        return {
-            compatible: true,
-            warning: `Backup version ${version} differs from current version ${BACKUP_VERSION}, but should be compatible.`
-        }
+    return {
+        compatible: false,
+        warning: `Backup version ${version} is not compatible with current version ${BACKUP_VERSION}.`
     }
-
-    return { compatible: true }
 }
 
 /**
