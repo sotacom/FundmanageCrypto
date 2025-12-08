@@ -587,20 +587,20 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
                     <AlertDialogTitle>Bạn có chắc chắn muốn xóa?</AlertDialogTitle>
                     <AlertDialogDescription>
                       Hành động này không thể hoàn tác. Giao dịch sẽ bị xóa vĩnh viễn và toàn bộ lịch sử quỹ sẽ được tính toán lại.
-                      <div className="mt-4">
-                        <Label htmlFor="confirm-delete" className="text-sm font-medium text-gray-700">
-                          Nhập "XOA" để xác nhận:
-                        </Label>
-                        <Input
-                          id="confirm-delete"
-                          value={deleteConfirmation}
-                          onChange={(e) => setDeleteConfirmation(e.target.value)}
-                          className="mt-2"
-                          placeholder="XOA"
-                        />
-                      </div>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <div className="mt-4">
+                    <Label htmlFor="confirm-delete" className="text-sm font-medium text-gray-700">
+                      Nhập "XOA" để xác nhận:
+                    </Label>
+                    <Input
+                      id="confirm-delete"
+                      value={deleteConfirmation}
+                      onChange={(e) => setDeleteConfirmation(e.target.value)}
+                      className="mt-2"
+                      placeholder="XOA"
+                    />
+                  </div>
                   <AlertDialogFooter>
                     <AlertDialogCancel onClick={() => setDeleteConfirmation('')}>Hủy</AlertDialogCancel>
                     <AlertDialogAction
