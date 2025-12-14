@@ -48,45 +48,51 @@ export function formatDateInTimezone(
  */
 export function localToUTC(localDateTimeStr: string, timezone: string): Date {
     // datetime-local format: "2024-12-08T14:30"
-    // We need to interpret this as being in the fund's timezone
-
-    // Create a date formatter that can parse the timezone offset
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-    })
+    // We need to interpret this as being in the fund's timezone and convert to UTC
 
     // Parse the local datetime string
     const [datePart, timePart] = localDateTimeStr.split('T')
     const [year, month, day] = datePart.split('-').map(Number)
     const [hour, minute] = timePart.split(':').map(Number)
 
-    // Create date in UTC, then adjust for timezone offset
-    // We do this by creating a date and finding the offset
-    const tempDate = new Date(Date.UTC(year, month - 1, day, hour, minute))
+    // Create a date object representing this datetime in the target timezone
+    // We'll use the timezone offset to calculate the correct UTC time
 
-    // Get the timezone offset for this date in the target timezone
-    const parts = formatter.formatToParts(tempDate)
-    const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0'
+    // First, create a reference date at this exact datetime
+    // Using UTC initially to avoid system timezone interference
+    const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0))
 
-    // Calculate what the UTC time should be
-    // Since we want localDateTimeStr to represent the time in `timezone`,
-    // we need to find the offset and adjust
+    // Get what time it would be in the target timezone at this UTC moment
+    const inTzFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    })
 
-    // Use a different approach: create the date and use getTimezoneOffset equivalent
-    const localDate = new Date(`${localDateTimeStr}:00`)
+    const parts = inTzFormatter.formatToParts(utcGuess)
+    const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0')
 
-    // Get the offset for the target timezone at this particular datetime
-    const tzOffset = getTimezoneOffset(timezone, localDate)
+    const tzYear = getPart('year')
+    const tzMonth = getPart('month')
+    const tzDay = getPart('day')
+    const tzHour = getPart('hour') === 24 ? 0 : getPart('hour')
+    const tzMinute = getPart('minute')
 
-    // Adjust: localDate + localOffset - tzOffset = UTC
-    const localOffset = localDate.getTimezoneOffset() * 60 * 1000
-    const utcTime = localDate.getTime() + localOffset - tzOffset
+    // Calculate the difference between what we want and what we got
+    // This tells us the offset to apply
+    const wantedMs = Date.UTC(year, month - 1, day, hour, minute, 0, 0)
+    const gotMs = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, 0, 0)
+
+    // The offset is: gotMs - wantedMs = timezone offset
+    // So UTC = wantedMs - offset = wantedMs - (gotMs - wantedMs) = 2*wantedMs - gotMs
+    // Simpler: UTC = utcGuess - (gotMs - wantedMs) = utcGuess + wantedMs - gotMs
+    const offsetMs = gotMs - wantedMs
+    const utcTime = utcGuess.getTime() - offsetMs
 
     return new Date(utcTime)
 }
@@ -121,15 +127,6 @@ export function utcToLocal(utcDate: string | Date, timezone: string): string {
 
     // Format for datetime-local: YYYY-MM-DDTHH:mm
     return `${year}-${month}-${day}T${hour}:${minute}`
-}
-
-/**
- * Get timezone offset in milliseconds for a specific timezone at a specific date
- */
-function getTimezoneOffset(timezone: string, date: Date): number {
-    const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }))
-    const tzDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }))
-    return (tzDate.getTime() - utcDate.getTime())
 }
 
 /**
