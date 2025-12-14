@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Plus, AlertCircle, Trash2 } from 'lucide-react'
 import { Account, ACCOUNT_TYPE_LABELS } from '@/types/account'
-import { utcToLocal, getCurrentDatetimeInTimezone } from '@/lib/timezone-utils'
+import { utcToLocal, getCurrentDatetimeInTimezone, localToUTC } from '@/lib/timezone-utils'
 import { usePermission } from '@/contexts/PermissionContext'
 import {
   AlertDialog,
@@ -219,7 +219,11 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
         amount: parseFloat(formData.amount),
         price: needsPrice ? parseFloat(formData.price) : null,
         fee: needsFee ? parseFloat(formData.fee) : null,
-        currency: selectedTransactionType?.currency || 'VND'
+        currency: selectedTransactionType?.currency || 'VND',
+        // Convert transaction date from fund timezone to UTC before saving
+        transactionDate: formData.transactionDate
+          ? localToUTC(formData.transactionDate, currentFundTimezone)
+          : undefined
       }
 
       const response = await fetch('/api/transactions', {
