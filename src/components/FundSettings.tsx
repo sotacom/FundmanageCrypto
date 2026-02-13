@@ -52,6 +52,42 @@ export default function FundSettings({ fundId, fundName, fundDescription, fundTi
     const [backupNeedsTimezone, setBackupNeedsTimezone] = useState(false) // v1.0 backup flag
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // Recalculate states
+    const [recalculating, setRecalculating] = useState(false)
+    const [recalculateSuccess, setRecalculateSuccess] = useState(false)
+    const [recalculateError, setRecalculateError] = useState<string | null>(null)
+
+    const handleRecalculate = async () => {
+        setRecalculating(true)
+        setRecalculateError(null)
+        setRecalculateSuccess(false)
+
+        try {
+            const response = await fetch('/api/funds/recalculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fundId })
+            })
+
+            const data = await response.json()
+
+            if (response.ok) {
+                setRecalculateSuccess(true)
+                if (onSettingsChanged) {
+                    onSettingsChanged()
+                }
+                setTimeout(() => setRecalculateSuccess(false), 3000)
+            } else {
+                setRecalculateError(data.error || 'Failed to recalculate')
+            }
+        } catch (error) {
+            console.error('Error recalculating:', error)
+            setRecalculateError('Failed to connect to server')
+        } finally {
+            setRecalculating(false)
+        }
+    }
+
     // Sync internal state when prop changes (after successful save & refresh)
     useEffect(() => {
         setMethod(currentMethod)
@@ -479,6 +515,50 @@ export default function FundSettings({ fundId, fundName, fundDescription, fundTi
                             ⚠️ Lưu ý: Thay đổi cài đặt sẽ tính lại toàn bộ quỹ theo phương pháp mới
                         </p>
                     )}
+                </CardContent>
+            </Card>
+
+            {/* Recalculate Data Card */}
+            <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Database className="h-5 w-5" />
+                        Tính Toán Lại Dữ Liệu
+                    </CardTitle>
+                    <CardDescription>
+                        Buộc hệ thống tính toán lại toàn bộ dữ liệu quỹ (NAV, Lợi nhuận, Giá vốn) dựa trên lịch sử giao dịch.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        Sử dụng chức năng này khi bạn thấy số liệu hiển thị không chính xác hoặc sau khi hệ thống vừa cập nhật logic tính toán mới.
+                    </p>
+
+                    {recalculateError && (
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertDescription>{recalculateError}</AlertDescription>
+                        </Alert>
+                    )}
+
+                    {recalculateSuccess && (
+                        <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <AlertDescription className="text-green-800 dark:text-green-100">
+                                ✓ Đã tính toán lại dữ liệu thành công!
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    <Button
+                        onClick={handleRecalculate}
+                        disabled={recalculating}
+                        variant="secondary"
+                        className="w-full"
+                    >
+                        {recalculating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {recalculating ? 'Đang tính toán...' : 'Tính Toán Lại Ngay'}
+                    </Button>
                 </CardContent>
             </Card>
 
