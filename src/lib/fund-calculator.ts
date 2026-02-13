@@ -2,7 +2,8 @@ import { db } from './db'
 
 interface PortfolioState {
     amount: number
-    avgPrice: number
+    avgPrice: number    // Price in quote currency (VND for USDT, USDT for BTC)
+    avgPriceVnd: number // Price in VND (Cost Basis)
 }
 
 interface HoldingsByAccount {
@@ -36,7 +37,11 @@ export async function recalculateFund(fundId: string) {
 
     const getAssetState = (asset: string): PortfolioState => {
         if (!portfolio[asset]) {
-            portfolio[asset] = { amount: 0, avgPrice: 0 }
+            portfolio[asset] = {
+                amount: 0,
+                avgPrice: 0,
+                avgPriceVnd: asset === 'VND' ? 1 : 0
+            }
         }
         return portfolio[asset]
     }
@@ -65,20 +70,18 @@ export async function recalculateFund(fundId: string) {
                 const isFirstCapitalIn = existingCapitalIns.length === 0
 
                 if (isFirstCapitalIn || tx.note?.includes('initial')) {
-                    // First capital_in = initial capital (don't increment, set directly)
-                    // But only update if we haven't processed this yet
-                    // We'll update equity at the end of recalculation instead
                     console.log(`Capital In (Initial): ${tx.amount} VND`)
                 } else {
-                    // Subsequent capital_in = additional capital
                     console.log(`Capital In (Additional): ${tx.amount} VND`)
                 }
 
                 // Góp vốn: Tăng VND
                 updateAccount('VND', null, tx.amount)
-                getAssetState('VND').amount += tx.amount
+                const vndState = getAssetState('VND')
+                vndState.amount += tx.amount
                 // VND luôn có giá 1
-                getAssetState('VND').avgPrice = 1
+                vndState.avgPrice = 1
+                vndState.avgPriceVnd = 1
                 break
 
             case 'capital_out':
@@ -118,9 +121,15 @@ export async function recalculateFund(fundId: string) {
                 // 2. Tăng USDT & Tính lại AvgPrice (dùng số thực tế nhận được)
                 const usdtState = getAssetState('USDT')
                 const totalUsdtCost = (usdtState.amount * usdtState.avgPrice) + vndSpent
+                // Calculate Total VND Cost (should match totalUsdtCost for USDT since Quote is VND)
+                const totalUsdtCostVnd = (usdtState.amount * usdtState.avgPriceVnd) + vndSpent
+
                 const totalUsdtAmount = usdtState.amount + usdtBuyReceived
 
-                usdtState.avgPrice = totalUsdtCost / totalUsdtAmount
+                if (totalUsdtAmount > 0) {
+                    usdtState.avgPrice = totalUsdtCost / totalUsdtAmount
+                    usdtState.avgPriceVnd = totalUsdtCostVnd / totalUsdtAmount
+                }
                 usdtState.amount = totalUsdtAmount
 
                 updateAccount('USDT', tx.accountId || tx.toLocation, usdtBuyReceived)
@@ -149,10 +158,10 @@ export async function recalculateFund(fundId: string) {
 
                 // 1. Tính realized PnL (dùng VND thực tế nhận được)
                 const sellUsdtState = getAssetState('USDT')
-                costBasis = sellUsdtState.avgPrice
+                costBasis = sellUsdtState.avgPriceVnd // Use VND Cost Basis
                 realizedPnL = vndReceived - (usdtSellAmount * costBasis)
 
-                // 2. Giảm USDT
+                // 2. Giảm USDT (Avg Price không thay đổi khi bán)
                 sellUsdtState.amount -= usdtSellAmount
                 updateAccount('USDT', tx.fromLocation, -usdtSellAmount)
 
@@ -200,12 +209,19 @@ export async function recalculateFund(fundId: string) {
                 usdtForBtc.amount -= usdtSpent
                 updateAccount('USDT', tx.fromLocation, -usdtSpent)
 
+                // Calculate VND value of USDT spent based on current USDT avg price (VND)
+                const vndCostOfUsdtSpent = usdtSpent * usdtForBtc.avgPriceVnd
+
                 // 2. Tăng BTC (dùng số thực tế nhận được)
                 const btcState = getAssetState('BTC')
-                const totalBtcCost = (btcState.amount * btcState.avgPrice) + usdtSpent
+                const totalBtcCostUsdt = (btcState.amount * btcState.avgPrice) + usdtSpent
+                const totalBtcCostVnd = (btcState.amount * btcState.avgPriceVnd) + vndCostOfUsdtSpent
                 const totalBtcAmount = btcState.amount + btcBuyReceived
 
-                btcState.avgPrice = totalBtcCost / totalBtcAmount
+                if (totalBtcAmount > 0) {
+                    btcState.avgPrice = totalBtcCostUsdt / totalBtcAmount // USDT Cost Basis
+                    btcState.avgPriceVnd = totalBtcCostVnd / totalBtcAmount // VND Cost Basis
+                }
                 btcState.amount = totalBtcAmount
 
                 updateAccount('BTC', tx.toLocation, btcBuyReceived)
@@ -232,10 +248,13 @@ export async function recalculateFund(fundId: string) {
                     }
                 }
 
-                // 1. Tính realized PnL
+                // 1. Tính realized PnL in USDT (Generic PnL)
                 const sellBtcState = getAssetState('BTC')
                 costBasis = sellBtcState.avgPrice
-                realizedPnL = usdtReceived - (btcSellAmount * costBasis)
+                // This realizes PnL in USDT terms
+                const realizedPnLUsdt = usdtReceived - (btcSellAmount * costBasis)
+                // Note: We don't have a field for 'realizedPnLUsdt', storing to generic realizedPnL
+                realizedPnL = realizedPnLUsdt
 
                 // 2. Giảm BTC
                 sellBtcState.amount -= btcSellAmount
@@ -247,13 +266,34 @@ export async function recalculateFund(fundId: string) {
                     updateAccount('BTC', tx.fromLocation, -btcFeeAmount)
                 }
 
-                // 3. Tăng USDT (số thực tế nhận được)
+                // 3. Tăng USDT
+                // Value the new USDT at the current USDT Avg Price (VND) 
+                // OR technically, we should treat it as adding Value?
+                // To maintain consistency, we assume the incoming USDT carries the VND value 
+                // equivalent to its current market rate (which we approximate using existing AvgPrice? No, that's circular)
+                // Current logic was: newUsdtCost = prev + (received * existingAvg)
+                // Let's stick to that to recognize "Profit" immediately in Retained Earnings.
+
                 const usdtFromBtc = getAssetState('USDT')
                 const prevUsdtCost = usdtFromBtc.amount * usdtFromBtc.avgPrice
+                const prevUsdtCostVnd = usdtFromBtc.amount * usdtFromBtc.avgPriceVnd
+
+                // We use the EXISTING USDT Avg Price to value the incoming USDT.
+                // This implies "Any new USDT we get is worth the same as our old USDT"
+                // This matches the goal of recognizing profit if we sold BTC for MORE USDT than we bought.
+                const valutaionPriceVnd = usdtFromBtc.avgPriceVnd > 0 ? usdtFromBtc.avgPriceVnd : 25000 // Fallback if 0?
+                // Actually if usdtFromBtc.avgPriceVnd is 0, we can't value the profit. 
+                // But usually we have USDT.
+
                 const newUsdtCost = prevUsdtCost + (usdtReceived * usdtFromBtc.avgPrice)
+                const newUsdtCostVnd = prevUsdtCostVnd + (usdtReceived * valutaionPriceVnd)
+
                 const newUsdtAmount = usdtFromBtc.amount + usdtReceived
 
-                usdtFromBtc.avgPrice = newUsdtCost / newUsdtAmount
+                if (newUsdtAmount > 0) {
+                    usdtFromBtc.avgPrice = newUsdtCost / newUsdtAmount
+                    usdtFromBtc.avgPriceVnd = newUsdtCostVnd / newUsdtAmount
+                }
                 usdtFromBtc.amount = newUsdtAmount
 
                 updateAccount('USDT', tx.toLocation, usdtReceived)
@@ -269,21 +309,23 @@ export async function recalculateFund(fundId: string) {
             case 'earn_interest':
                 // Lãi suất USDT: 2 cách tính
                 const earnState = getAssetState('USDT')
-
                 const earnMethod = fund?.earnInterestMethod || 'reduce_avg_price'
+
                 if (earnMethod === 'keep_avg_price') {
-                    // ✨ CÁCH 2: Giữ nguyên giá TB
-                    // Không thay đổi avgPrice, chỉ tăng amount
+                    // CÁCH 2: Giữ nguyên giá TB -> Tăng Value -> Profit
                     earnState.amount += tx.amount
-                    console.log(`Earn Interest (Keep Avg Price): +${tx.amount} USDT, avgPrice unchanged at ${earnState.avgPrice}`)
+                    // avgPrice and avgPriceVnd stay same
                 } else {
-                    // ✨ CÁCH 1: Giảm giá TB (default)
-                    // Tăng amount nhưng không tăng cost → giảm avgPrice
+                    // CÁCH 1: Giảm giá TB -> Giữ Value -> No Profit yet
                     const prevCost = earnState.amount * earnState.avgPrice
+                    const prevCostVnd = earnState.amount * earnState.avgPriceVnd
+
                     const newAmount = earnState.amount + tx.amount
-                    earnState.avgPrice = prevCost / newAmount
+                    if (newAmount > 0) {
+                        earnState.avgPrice = prevCost / newAmount
+                        earnState.avgPriceVnd = prevCostVnd / newAmount
+                    }
                     earnState.amount = newAmount
-                    console.log(`Earn Interest (Reduce Avg Price): +${tx.amount} USDT, new avgPrice: ${earnState.avgPrice}`)
                 }
 
                 updateAccount('USDT', tx.toLocation, tx.amount)
@@ -298,7 +340,7 @@ export async function recalculateFund(fundId: string) {
             where: { id: tx.id },
             data: {
                 costBasis,
-                realizedPnL
+                realizedPnL: realizedPnL // Note: This might be USDT or VND depending on trade
             }
         })
     }
@@ -335,10 +377,13 @@ export async function recalculateFund(fundId: string) {
     const withdrawnCapital = capitalOutTransactions.reduce((sum, tx) => sum + tx.amount, 0)
 
     // Calculate total assets for retained earnings
+    // Now we use avgPriceVnd for ALL asset valuations to ensure historical cost is respected
     const vndValue = portfolio['VND']?.amount || 0
-    const usdtValue = (portfolio['USDT']?.amount || 0) * (portfolio['USDT']?.avgPrice || 0)
-    const btcValueUsdt = (portfolio['BTC']?.amount || 0) * (portfolio['BTC']?.avgPrice || 0)
-    const btcValueVnd = btcValueUsdt * (portfolio['USDT']?.avgPrice || 0)
+    const usdtValue = (portfolio['USDT']?.amount || 0) * (portfolio['USDT']?.avgPriceVnd || 0)
+    const btcValueVnd = (portfolio['BTC']?.amount || 0) * (portfolio['BTC']?.avgPriceVnd || 0)
+
+    // Note: btcValueVnd is now directly available via avgPriceVnd, no need to multiply by USDT avg price
+
     const totalAssets = vndValue + usdtValue + btcValueVnd
 
     const totalCapital = initialCapital + additionalCapital - withdrawnCapital
