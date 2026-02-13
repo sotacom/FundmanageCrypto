@@ -54,9 +54,16 @@ export async function recalculateFund(fundId: string) {
     }
 
     // 4. Process transactions
+    let lastUsdtPrice = 24000 // Default fallback price if no history
+
     for (const tx of transactions) {
         let costBasis = 0
         let realizedPnL = 0
+
+        // Update Reference Price from P2P transactions
+        if ((tx.type === 'buy_usdt' || tx.type === 'sell_usdt') && tx.price && tx.price > 0) {
+            lastUsdtPrice = tx.price
+        }
 
         // Logic per transaction type
         switch (tx.type) {
@@ -267,26 +274,17 @@ export async function recalculateFund(fundId: string) {
                 }
 
                 // 3. Tăng USDT
-                // Value the new USDT at the current USDT Avg Price (VND) 
-                // OR technically, we should treat it as adding Value?
-                // To maintain consistency, we assume the incoming USDT carries the VND value 
-                // equivalent to its current market rate (which we approximate using existing AvgPrice? No, that's circular)
-                // Current logic was: newUsdtCost = prev + (received * existingAvg)
-                // Let's stick to that to recognize "Profit" immediately in Retained Earnings.
 
                 const usdtFromBtc = getAssetState('USDT')
                 const prevUsdtCost = usdtFromBtc.amount * usdtFromBtc.avgPrice
                 const prevUsdtCostVnd = usdtFromBtc.amount * usdtFromBtc.avgPriceVnd
 
-                // We use the EXISTING USDT Avg Price to value the incoming USDT.
-                // This implies "Any new USDT we get is worth the same as our old USDT"
-                // This matches the goal of recognizing profit if we sold BTC for MORE USDT than we bought.
-                const valutaionPriceVnd = usdtFromBtc.avgPriceVnd > 0 ? usdtFromBtc.avgPriceVnd : 25000 // Fallback if 0?
-                // Actually if usdtFromBtc.avgPriceVnd is 0, we can't value the profit. 
-                // But usually we have USDT.
+                // IMPORTANT: Value the incoming USDT at the CURRENT MARKET PRICE (lastUsdtPrice)
+                // This correctly recognizes the realized profit in VND terms at the moment of sale
+                const valuationPriceVnd = lastUsdtPrice > 0 ? lastUsdtPrice : (usdtFromBtc.avgPriceVnd || 24000)
 
                 const newUsdtCost = prevUsdtCost + (usdtReceived * usdtFromBtc.avgPrice)
-                const newUsdtCostVnd = prevUsdtCostVnd + (usdtReceived * valutaionPriceVnd)
+                const newUsdtCostVnd = prevUsdtCostVnd + (usdtReceived * valuationPriceVnd)
 
                 const newUsdtAmount = usdtFromBtc.amount + usdtReceived
 
@@ -311,19 +309,30 @@ export async function recalculateFund(fundId: string) {
                 const earnState = getAssetState('USDT')
                 const earnMethod = fund?.earnInterestMethod || 'reduce_avg_price'
 
-                if (earnMethod === 'keep_avg_price') {
-                    // CÁCH 2: Giữ nguyên giá TB -> Tăng Value -> Profit
-                    earnState.amount += tx.amount
-                    // avgPrice and avgPriceVnd stay same
-                } else {
-                    // CÁCH 1: Giảm giá TB -> Giữ Value -> No Profit yet
-                    const prevCost = earnState.amount * earnState.avgPrice
-                    const prevCostVnd = earnState.amount * earnState.avgPriceVnd
+                // Value the interest at current market price
+                const interestValuationPriceVnd = lastUsdtPrice > 0 ? lastUsdtPrice : (earnState.avgPriceVnd || 24000)
 
-                    const newAmount = earnState.amount + tx.amount
+                // Handle both methods similarly for VND valuation purposes (recognize value gain)
+                // But keep USDT Avg Price behavior consistent with earnMethod
+
+                const prevCost = earnState.amount * earnState.avgPrice
+                const prevCostVnd = earnState.amount * earnState.avgPriceVnd
+
+                // Treat as incoming value for VND basis
+                const newCostVnd = prevCostVnd + (tx.amount * interestValuationPriceVnd)
+                const newAmount = earnState.amount + tx.amount
+
+                if (earnMethod === 'keep_avg_price') {
+                    // Method 2: Don't change USDT Avg Price
+                    if (newAmount > 0) {
+                        earnState.avgPriceVnd = newCostVnd / newAmount
+                    }
+                    earnState.amount = newAmount
+                } else {
+                    // Method 1 (default): Reduce USDT Avg Price (Cost is 0 in USDT terms)
                     if (newAmount > 0) {
                         earnState.avgPrice = prevCost / newAmount
-                        earnState.avgPriceVnd = prevCostVnd / newAmount
+                        earnState.avgPriceVnd = newCostVnd / newAmount
                     }
                     earnState.amount = newAmount
                 }
