@@ -55,6 +55,7 @@ export async function recalculateFund(fundId: string) {
 
     // 4. Process transactions
     let lastUsdtPrice = 24000 // Default fallback price if no history
+    let accumulatedRetainedEarnings = 0 // Tích lũy LNCPP trực tiếp từ realized PnL (VND)
 
     for (const tx of transactions) {
         let costBasis = 0
@@ -168,6 +169,9 @@ export async function recalculateFund(fundId: string) {
                 costBasis = sellUsdtState.avgPriceVnd // Use VND Cost Basis
                 realizedPnL = vndReceived - (usdtSellAmount * costBasis)
 
+                // Tích lũy LNCPP: PnL sell_usdt đã tính bằng VND
+                accumulatedRetainedEarnings += realizedPnL
+
                 // 2. Giảm USDT (Avg Price không thay đổi khi bán)
                 sellUsdtState.amount -= usdtSellAmount
                 updateAccount('USDT', tx.fromLocation, -usdtSellAmount)
@@ -263,6 +267,10 @@ export async function recalculateFund(fundId: string) {
                 // Note: We don't have a field for 'realizedPnLUsdt', storing to generic realizedPnL
                 realizedPnL = realizedPnLUsdt
 
+                // Tích lũy LNCPP: chuyển PnL USDT sang VND dùng avgPriceVnd của USDT tại thời điểm bán
+                const usdtAvgPriceVndAtSale = getAssetState('USDT').avgPriceVnd
+                accumulatedRetainedEarnings += realizedPnLUsdt * usdtAvgPriceVndAtSale
+
                 // 2. Giảm BTC
                 sellBtcState.amount -= btcSellAmount
                 updateAccount('BTC', tx.fromLocation, -btcSellAmount)
@@ -311,6 +319,11 @@ export async function recalculateFund(fundId: string) {
 
                 // Value the interest at current market price
                 const interestValuationPriceVnd = lastUsdtPrice > 0 ? lastUsdtPrice : (earnState.avgPriceVnd || 24000)
+
+                // Tích lũy LNCPP: Lãi earn là thu nhập thực tế (cost = 0)
+                // Dùng avgPriceVnd hiện tại của USDT để quy đổi VND
+                const earnValueVnd = tx.amount * (earnState.avgPriceVnd > 0 ? earnState.avgPriceVnd : interestValuationPriceVnd)
+                accumulatedRetainedEarnings += earnValueVnd
 
                 // Handle both methods similarly for VND valuation purposes (recognize value gain)
                 // But keep USDT Avg Price behavior consistent with earnMethod
@@ -385,18 +398,10 @@ export async function recalculateFund(fundId: string) {
     const additionalCapital = capitalInTransactions.slice(1).reduce((sum, tx) => sum + tx.amount, 0)
     const withdrawnCapital = capitalOutTransactions.reduce((sum, tx) => sum + tx.amount, 0)
 
-    // Calculate total assets for retained earnings
-    // Now we use avgPriceVnd for ALL asset valuations to ensure historical cost is respected
-    const vndValue = portfolio['VND']?.amount || 0
-    const usdtValue = (portfolio['USDT']?.amount || 0) * (portfolio['USDT']?.avgPriceVnd || 0)
-    const btcValueVnd = (portfolio['BTC']?.amount || 0) * (portfolio['BTC']?.avgPriceVnd || 0)
-
-    // Note: btcValueVnd is now directly available via avgPriceVnd, no need to multiply by USDT avg price
-
-    const totalAssets = vndValue + usdtValue + btcValueVnd
-
-    const totalCapital = initialCapital + additionalCapital - withdrawnCapital
-    const retainedEarnings = totalAssets - totalCapital
+    // Retained Earnings = tích lũy trực tiếp từ realized PnL (VND)
+    // Bao gồm: sell_btc PnL (USDT→VND), sell_usdt PnL (VND), earn_interest income (VND)
+    // KHÔNG dùng công thức totalAssets(cost) - totalCapital vì avgPriceVnd tracking có thể bị lệch
+    const retainedEarnings = accumulatedRetainedEarnings
 
     // Update fund equity
     await db.fund.update({
