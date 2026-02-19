@@ -213,7 +213,7 @@ export default function FundDashboard() {
     }
 
     fetchFundData()
-  }, [currentFundId, permissionLoading])
+  }, [currentFundId, permissionLoading, refreshTrigger])
 
   // Fetch accounts with balances
   useEffect(() => {
