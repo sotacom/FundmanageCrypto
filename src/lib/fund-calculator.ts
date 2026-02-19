@@ -57,6 +57,13 @@ export async function recalculateFund(fundId: string) {
     let lastUsdtPrice = 24000 // Default fallback price if no history
     let accumulatedRetainedEarnings = 0 // Tích lũy LNCPP trực tiếp từ realized PnL (VND)
 
+    // USDT avgPrice accumulators: tính giá vốn TB = Tổng VND / Tổng USDT mua
+    // Không bị ảnh hưởng bởi giao dịch BTC (buy_btc/sell_btc)
+    const earnInterestMethod = fund?.earnInterestMethod || 'reduce_avg_price'
+    let usdtTotalVndSpent = 0   // Σ VND đã chi mua USDT
+    let usdtTotalBought = 0     // Σ USDT đã mua từ buy_usdt
+    let usdtTotalEarned = 0     // Σ USDT từ earn_interest
+
     for (const tx of transactions) {
         let costBasis = 0
         let realizedPnL = 0
@@ -126,19 +133,22 @@ export async function recalculateFund(fundId: string) {
                 updateAccount('VND', null, -vndSpent)
                 getAssetState('VND').amount -= vndSpent
 
-                // 2. Tăng USDT & Tính lại AvgPrice (dùng số thực tế nhận được)
+                // 2. Tăng USDT & Tính lại AvgPrice
+                // AvgPrice = Tổng VND đã chi / Tổng USDT đã mua (simple all-time average)
                 const usdtState = getAssetState('USDT')
-                const totalUsdtCost = (usdtState.amount * usdtState.avgPrice) + vndSpent
-                // Calculate Total VND Cost (should match totalUsdtCost for USDT since Quote is VND)
-                const totalUsdtCostVnd = (usdtState.amount * usdtState.avgPriceVnd) + vndSpent
+                usdtTotalVndSpent += vndSpent
+                usdtTotalBought += usdtBuyReceived
 
-                const totalUsdtAmount = usdtState.amount + usdtBuyReceived
+                const usdtDenominator = earnInterestMethod === 'reduce_avg_price'
+                    ? usdtTotalBought + usdtTotalEarned
+                    : usdtTotalBought
 
-                if (totalUsdtAmount > 0) {
-                    usdtState.avgPrice = totalUsdtCost / totalUsdtAmount
-                    usdtState.avgPriceVnd = totalUsdtCostVnd / totalUsdtAmount
+                if (usdtDenominator > 0) {
+                    const newAvg = usdtTotalVndSpent / usdtDenominator
+                    usdtState.avgPrice = newAvg
+                    usdtState.avgPriceVnd = newAvg
                 }
-                usdtState.amount = totalUsdtAmount
+                usdtState.amount += usdtBuyReceived
 
                 updateAccount('USDT', tx.accountId || tx.toLocation, usdtBuyReceived)
                 break
@@ -281,21 +291,10 @@ export async function recalculateFund(fundId: string) {
                     updateAccount('BTC', tx.fromLocation, -btcFeeAmount)
                 }
 
-                // 3. Tăng USDT
-                // USDT nhận về từ sell_btc: định giá bằng avgPrice hiện tại
-                // Đảm bảo avgPrice và avgPriceVnd luôn đồng bộ cho USDT (cùng đại diện VND/USDT)
+                // 3. Tăng USDT (chỉ cập nhật số lượng, KHÔNG thay đổi avgPrice)
+                // avgPrice USDT chỉ phụ thuộc vào giao dịch VND→USDT, không bị ảnh hưởng bởi BTC
                 const usdtFromBtc = getAssetState('USDT')
-                const prevUsdtCost = usdtFromBtc.amount * usdtFromBtc.avgPrice
-
-                const newUsdtCost = prevUsdtCost + (usdtReceived * usdtFromBtc.avgPrice)
-                const newUsdtAmount = usdtFromBtc.amount + usdtReceived
-
-                if (newUsdtAmount > 0) {
-                    const newAvgPrice = newUsdtCost / newUsdtAmount
-                    usdtFromBtc.avgPrice = newAvgPrice
-                    usdtFromBtc.avgPriceVnd = newAvgPrice // Đồng bộ
-                }
-                usdtFromBtc.amount = newUsdtAmount
+                usdtFromBtc.amount += usdtReceived
 
                 updateAccount('USDT', tx.toLocation, usdtReceived)
                 break
@@ -310,30 +309,26 @@ export async function recalculateFund(fundId: string) {
             case 'earn_interest':
                 // Lãi suất USDT: 2 cách tính giá vốn TB
                 const earnState = getAssetState('USDT')
-                const earnMethod = fund?.earnInterestMethod || 'reduce_avg_price'
 
                 // Tích lũy LNCPP: Lãi earn là thu nhập thực tế (cost = 0)
                 // Quy đổi VND bằng avgPrice hiện tại của USDT
                 const earnPriceForVnd = earnState.avgPrice > 0 ? earnState.avgPrice : (lastUsdtPrice > 0 ? lastUsdtPrice : 24000)
                 accumulatedRetainedEarnings += tx.amount * earnPriceForVnd
 
-                const newAmount = earnState.amount + tx.amount
+                // Tăng số lượng USDT
+                earnState.amount += tx.amount
 
-                if (earnMethod === 'keep_avg_price') {
-                    // Giữ nguyên giá TB: avgPrice không đổi, chỉ tăng số lượng
-                    // (Earned USDT được coi như có cost = avgPrice hiện tại)
-                    earnState.amount = newAmount
-                    // avgPrice và avgPriceVnd giữ nguyên → luôn đồng bộ
-                } else {
-                    // Giảm giá TB: Earned USDT có cost = 0, giảm avgPrice
-                    const prevCost = earnState.amount * earnState.avgPrice
-                    if (newAmount > 0) {
-                        const newAvgPrice = prevCost / newAmount
-                        earnState.avgPrice = newAvgPrice
-                        earnState.avgPriceVnd = newAvgPrice // Đồng bộ
+                if (earnInterestMethod === 'reduce_avg_price') {
+                    // Giảm giá TB: thêm earned vào mẫu số → avgPrice giảm
+                    usdtTotalEarned += tx.amount
+                    const newDenominator = usdtTotalBought + usdtTotalEarned
+                    if (newDenominator > 0) {
+                        const newAvg = usdtTotalVndSpent / newDenominator
+                        earnState.avgPrice = newAvg
+                        earnState.avgPriceVnd = newAvg
                     }
-                    earnState.amount = newAmount
                 }
+                // keep_avg_price: avgPrice không đổi (earned không vào mẫu số)
 
                 updateAccount('USDT', tx.toLocation, tx.amount)
                 break
