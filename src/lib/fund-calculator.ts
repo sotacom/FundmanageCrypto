@@ -282,23 +282,18 @@ export async function recalculateFund(fundId: string) {
                 }
 
                 // 3. Tăng USDT
-
+                // USDT nhận về từ sell_btc: định giá bằng avgPrice hiện tại
+                // Đảm bảo avgPrice và avgPriceVnd luôn đồng bộ cho USDT (cùng đại diện VND/USDT)
                 const usdtFromBtc = getAssetState('USDT')
                 const prevUsdtCost = usdtFromBtc.amount * usdtFromBtc.avgPrice
-                const prevUsdtCostVnd = usdtFromBtc.amount * usdtFromBtc.avgPriceVnd
-
-                // IMPORTANT: Value the incoming USDT at the CURRENT MARKET PRICE (lastUsdtPrice)
-                // This correctly recognizes the realized profit in VND terms at the moment of sale
-                const valuationPriceVnd = lastUsdtPrice > 0 ? lastUsdtPrice : (usdtFromBtc.avgPriceVnd || 24000)
 
                 const newUsdtCost = prevUsdtCost + (usdtReceived * usdtFromBtc.avgPrice)
-                const newUsdtCostVnd = prevUsdtCostVnd + (usdtReceived * valuationPriceVnd)
-
                 const newUsdtAmount = usdtFromBtc.amount + usdtReceived
 
                 if (newUsdtAmount > 0) {
-                    usdtFromBtc.avgPrice = newUsdtCost / newUsdtAmount
-                    usdtFromBtc.avgPriceVnd = newUsdtCostVnd / newUsdtAmount
+                    const newAvgPrice = newUsdtCost / newUsdtAmount
+                    usdtFromBtc.avgPrice = newAvgPrice
+                    usdtFromBtc.avgPriceVnd = newAvgPrice // Đồng bộ
                 }
                 usdtFromBtc.amount = newUsdtAmount
 
@@ -313,39 +308,29 @@ export async function recalculateFund(fundId: string) {
                 break
 
             case 'earn_interest':
-                // Lãi suất USDT: 2 cách tính
+                // Lãi suất USDT: 2 cách tính giá vốn TB
                 const earnState = getAssetState('USDT')
                 const earnMethod = fund?.earnInterestMethod || 'reduce_avg_price'
 
-                // Value the interest at current market price
-                const interestValuationPriceVnd = lastUsdtPrice > 0 ? lastUsdtPrice : (earnState.avgPriceVnd || 24000)
-
                 // Tích lũy LNCPP: Lãi earn là thu nhập thực tế (cost = 0)
-                // Dùng avgPriceVnd hiện tại của USDT để quy đổi VND
-                const earnValueVnd = tx.amount * (earnState.avgPriceVnd > 0 ? earnState.avgPriceVnd : interestValuationPriceVnd)
-                accumulatedRetainedEarnings += earnValueVnd
+                // Quy đổi VND bằng avgPrice hiện tại của USDT
+                const earnPriceForVnd = earnState.avgPrice > 0 ? earnState.avgPrice : (lastUsdtPrice > 0 ? lastUsdtPrice : 24000)
+                accumulatedRetainedEarnings += tx.amount * earnPriceForVnd
 
-                // Handle both methods similarly for VND valuation purposes (recognize value gain)
-                // But keep USDT Avg Price behavior consistent with earnMethod
-
-                const prevCost = earnState.amount * earnState.avgPrice
-                const prevCostVnd = earnState.amount * earnState.avgPriceVnd
-
-                // Treat as incoming value for VND basis
-                const newCostVnd = prevCostVnd + (tx.amount * interestValuationPriceVnd)
                 const newAmount = earnState.amount + tx.amount
 
                 if (earnMethod === 'keep_avg_price') {
-                    // Method 2: Don't change USDT Avg Price
-                    if (newAmount > 0) {
-                        earnState.avgPriceVnd = newCostVnd / newAmount
-                    }
+                    // Giữ nguyên giá TB: avgPrice không đổi, chỉ tăng số lượng
+                    // (Earned USDT được coi như có cost = avgPrice hiện tại)
                     earnState.amount = newAmount
+                    // avgPrice và avgPriceVnd giữ nguyên → luôn đồng bộ
                 } else {
-                    // Method 1 (default): Reduce USDT Avg Price (Cost is 0 in USDT terms)
+                    // Giảm giá TB: Earned USDT có cost = 0, giảm avgPrice
+                    const prevCost = earnState.amount * earnState.avgPrice
                     if (newAmount > 0) {
-                        earnState.avgPrice = prevCost / newAmount
-                        earnState.avgPriceVnd = newCostVnd / newAmount
+                        const newAvgPrice = prevCost / newAmount
+                        earnState.avgPrice = newAvgPrice
+                        earnState.avgPriceVnd = newAvgPrice // Đồng bộ
                     }
                     earnState.amount = newAmount
                 }
