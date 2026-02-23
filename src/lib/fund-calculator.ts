@@ -333,6 +333,29 @@ export async function recalculateFund(fundId: string) {
                 updateAccount('USDT', tx.toLocation, tx.amount)
                 break
 
+            case 'futures_pnl':
+                // Ghi nhận PnL từ giao dịch Futures (Long/Short)
+                // amount = PnL in USDT (dương = lời, âm = lỗ)
+                // fee = phí giao dịch (USDT)
+                const futuresPnlAmount = tx.amount // PnL in USDT
+                const futuresFee = (tx.fee && tx.fee > 0) ? tx.fee : 0
+
+                // Cập nhật USDT balance: PnL - phí
+                const futuresNet = futuresPnlAmount - futuresFee
+                const futuresUsdtState = getAssetState('USDT')
+                futuresUsdtState.amount += futuresNet
+
+                // Tích lũy LNCPP: quy đổi PnL sang VND
+                const futuresAvgPrice = futuresUsdtState.avgPrice > 0 ? futuresUsdtState.avgPrice : (lastUsdtPrice > 0 ? lastUsdtPrice : 24000)
+                accumulatedRetainedEarnings += futuresNet * futuresAvgPrice
+
+                // Ghi nhận realizedPnL cho transaction
+                realizedPnL = futuresPnlAmount
+                costBasis = futuresFee // Lưu phí vào costBasis để tham chiếu
+
+                updateAccount('USDT', tx.toLocation || tx.fromLocation, futuresNet)
+                break
+
             default:
                 console.warn(`Unknown transaction type: ${tx.type}`)
         }

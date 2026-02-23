@@ -42,7 +42,8 @@ const transactionTypes = [
   { value: 'buy_btc', label: 'Mua BTC (USDT → BTC)', currency: 'BTC' },
   { value: 'sell_btc', label: 'Bán BTC (BTC → USDT)', currency: 'BTC' },
   { value: 'transfer_btc', label: 'Chuyển BTC', currency: 'BTC' },
-  { value: 'earn_interest', label: 'Lãi suất USDT Earn', currency: 'USDT' }
+  { value: 'earn_interest', label: 'Lãi suất USDT Earn', currency: 'USDT' },
+  { value: 'futures_pnl', label: 'PnL Futures (Long/Short)', currency: 'USDT' }
 ]
 
 export default function TransactionForm({ onSubmit, onCancel, fundId, initialData, transactionId }: TransactionFormProps) {
@@ -72,8 +73,8 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
   const needsPrice = ['buy_usdt', 'sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
   const needsTransferLocations = ['transfer_usdt', 'transfer_btc'].includes(formData.type)
   const needsFromAccount = ['sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
-  const needsToAccount = ['buy_usdt', 'buy_btc', 'sell_btc', 'earn_interest'].includes(formData.type)
-  const needsFee = ['buy_btc', 'sell_btc'].includes(formData.type)
+  const needsToAccount = ['buy_usdt', 'buy_btc', 'sell_btc', 'earn_interest', 'futures_pnl'].includes(formData.type)
+  const needsFee = ['buy_btc', 'sell_btc', 'futures_pnl'].includes(formData.type)
 
   // Fetch accounts
   useEffect(() => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, TrendingDown, Bitcoin, DollarSign, Globe, ArrowUpDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, Bitcoin, DollarSign, Globe, ArrowUpDown, BarChart3 } from 'lucide-react'
 import { formatCurrency, formatNumber } from '@/lib/format'
 
 interface PnLAnalysisProps {
@@ -28,9 +28,21 @@ interface UsdtPnLData {
     avgSpread: number
 }
 
+interface FuturesPnLData {
+    totalPnL: number
+    totalFees: number
+    totalNet: number
+    count: number
+    wins: number
+    losses: number
+    winRate: number
+    avgPerTrade: number
+}
+
 export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnalysisProps) {
     const [btcPnL, setBtcPnL] = useState<BtcPnLData | null>(null)
     const [usdtPnL, setUsdtPnL] = useState<UsdtPnLData | null>(null)
+    const [futuresPnL, setFuturesPnL] = useState<FuturesPnLData | null>(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -45,6 +57,11 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
                 const usdtResponse = await fetch(`/api/analysis/usdt-pnl?fundId=${fundId}`)
                 const usdtData = await usdtResponse.json()
                 setUsdtPnL(usdtData)
+
+                // Fetch Futures realized PnL
+                const futuresResponse = await fetch(`/api/analysis/futures-pnl?fundId=${fundId}`)
+                const futuresData = await futuresResponse.json()
+                setFuturesPnL(futuresData)
             } catch (error) {
                 console.error('Error fetching PnL data:', error)
             } finally {
@@ -256,6 +273,78 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
                             <span>{currentPrices?.usdtVnd.toLocaleString()} VND</span>
                         </div>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Card 5: Futures PnL */}
+            <Card className="md:col-span-2">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5 text-yellow-500" />
+                        Lãi/Lỗ Thực Hiện - Futures
+                    </CardTitle>
+                    <CardDescription>
+                        Tổng hợp PnL từ giao dịch Long/Short BTC Futures
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {(futuresPnL?.count || 0) === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            Chưa có giao dịch Futures nào
+                        </p>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <p className="text-sm text-muted-foreground">Tổng PnL</p>
+                                <p className={`text-2xl font-bold ${(futuresPnL?.totalPnL || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {(futuresPnL?.totalPnL || 0) >= 0 ? '+' : ''}
+                                    {formatCurrency(futuresPnL?.totalPnL || 0, 'USDT')}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-muted-foreground">Tổng phí</p>
+                                <p className="text-2xl font-bold text-orange-600">
+                                    -{formatCurrency(futuresPnL?.totalFees || 0, 'USDT')}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-muted-foreground">PnL ròng</p>
+                                <p className={`text-2xl font-bold ${(futuresPnL?.totalNet || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {(futuresPnL?.totalNet || 0) >= 0 ? '+' : ''}
+                                    {formatCurrency(futuresPnL?.totalNet || 0, 'USDT')}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-muted-foreground">Win rate</p>
+                                <p className="text-2xl font-bold">
+                                    {futuresPnL?.winRate.toFixed(1)}%
+                                </p>
+                            </div>
+                            <div className="col-span-2 md:col-span-4 border-t pt-3 mt-1">
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Số giao dịch:</span>
+                                        <span className="font-medium">{futuresPnL?.count || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Win / Loss:</span>
+                                        <span className="font-medium">
+                                            <span className="text-green-600">{futuresPnL?.wins || 0}</span>
+                                            {' / '}
+                                            <span className="text-red-600">{futuresPnL?.losses || 0}</span>
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">TB mỗi trade:</span>
+                                        <span className={`font-medium ${(futuresPnL?.avgPerTrade || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {(futuresPnL?.avgPerTrade || 0) >= 0 ? '+' : ''}
+                                            {(futuresPnL?.avgPerTrade || 0).toFixed(2)} USDT
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

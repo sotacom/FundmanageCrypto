@@ -40,7 +40,8 @@ const transactionTypeLabels: Record<string, string> = {
   buy_btc: 'Mua BTC',
   sell_btc: 'Bán BTC',
   transfer_btc: 'Chuyển BTC',
-  earn_interest: 'Lãi suất USDT Earn'
+  earn_interest: 'Lãi suất USDT Earn',
+  futures_pnl: 'PnL Futures'
 }
 
 export default function TransactionHistory({ fundId, refreshTrigger }: TransactionHistoryProps) {
@@ -49,6 +50,32 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const [accountMap, setAccountMap] = useState<Record<string, string>>({})
+
+  // Fetch accounts to map IDs to names
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const response = await fetch(`/api/accounts?fundId=${fundId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const map: Record<string, string> = {}
+          for (const acc of data.accounts || []) {
+            map[acc.id] = acc.name
+          }
+          setAccountMap(map)
+        }
+      } catch (err) {
+        console.error('Error fetching accounts for names:', err)
+      }
+    }
+    if (fundId) fetchAccounts()
+  }, [fundId])
+
+  const getAccountName = (id?: string) => {
+    if (!id) return null
+    return accountMap[id] || id
+  }
 
   const fetchTransactions = async () => {
     try {
@@ -98,6 +125,8 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
         return '🔄'
       case 'earn_interest':
         return '📈'
+      case 'futures_pnl':
+        return '📊'
       default:
         return '📋'
     }
@@ -195,10 +224,10 @@ export default function TransactionHistory({ fundId, refreshTrigger }: Transacti
                         <p className="text-sm text-gray-600 mt-1">{transaction.note}</p>
                       )}
                       {(transaction.fromLocation || transaction.toLocation) && (
-                        <p className="text-sm text-blue-600 mt-1">
-                          {transaction.fromLocation && `Từ: ${transaction.fromLocation}`}
+                        <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                          {transaction.fromLocation && `Từ: ${getAccountName(transaction.fromLocation)}`}
                           {transaction.fromLocation && transaction.toLocation && ' → '}
-                          {transaction.toLocation && `Đến: ${transaction.toLocation}`}
+                          {transaction.toLocation && `Đến: ${getAccountName(transaction.toLocation)}`}
                         </p>
                       )}
                     </div>

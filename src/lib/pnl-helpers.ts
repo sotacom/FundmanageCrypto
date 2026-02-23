@@ -83,3 +83,32 @@ export async function countP2PTrades(fundId: string): Promise<number> {
     })
     return count
 }
+
+/**
+ * Calculate realized PnL from Futures trading (futures_pnl transactions)
+ */
+export async function calculateFuturesRealizedPnL(fundId: string) {
+    const futuresTransactions = await db.transaction.findMany({
+        where: {
+            fundId,
+            type: 'futures_pnl'
+        },
+        orderBy: { createdAt: 'desc' }
+    })
+
+    const totalPnL = futuresTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+    const totalFees = futuresTransactions.reduce((sum, tx) => sum + (tx.fee || 0), 0)
+    const totalNet = totalPnL - totalFees
+    const positiveCount = futuresTransactions.filter(tx => tx.amount > 0).length
+
+    return {
+        totalPnL,
+        totalFees,
+        totalNet,
+        count: futuresTransactions.length,
+        wins: positiveCount,
+        losses: futuresTransactions.length - positiveCount,
+        winRate: futuresTransactions.length > 0 ? (positiveCount / futuresTransactions.length) * 100 : 0,
+        avgPerTrade: futuresTransactions.length > 0 ? totalNet / futuresTransactions.length : 0
+    }
+}
