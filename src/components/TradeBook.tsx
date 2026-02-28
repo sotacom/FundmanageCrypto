@@ -19,6 +19,8 @@ interface SpotTrade {
     costBasis: number
     pnl: number
     fee: number
+    sellFee: number
+    buyFee: number
     feeCurrency: string
     account: string | null
     note: string | null
@@ -204,7 +206,12 @@ export default function TradeBook({ fundId }: TradeBookProps) {
                                             </td>
                                             <td className="text-right py-3 px-2 font-mono text-orange-600">
                                                 {trade.fee > 0 ? (
-                                                    <>-{trade.fee.toFixed(trade.feeCurrency === 'BTC' ? 8 : 2)} {trade.feeCurrency}</>
+                                                    <div>
+                                                        <div>-{trade.fee.toFixed(2)} USDT</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            M: {trade.buyFee.toFixed(2)} | B: {trade.sellFee.toFixed(2)}
+                                                        </div>
+                                                    </div>
                                                 ) : '-'}
                                             </td>
                                             <td className="py-3 px-2 text-muted-foreground max-w-[200px] truncate">
