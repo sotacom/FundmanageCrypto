@@ -10,6 +10,7 @@ import { TransactionModal } from '@/components/TransactionForm'
 import TransactionHistory from '@/components/TransactionHistory'
 import FundSettings from '@/components/FundSettings'
 import PnLAnalysis from '@/components/PnLAnalysis'
+import TradeBook from '@/components/TradeBook'
 import AccountManagement from '@/components/AccountManagement'
 import { formatCurrency, formatNumber, formatPercentage } from '@/lib/format'
 import { SiteHeader } from '@/components/site-header'
@@ -351,6 +352,7 @@ export default function FundDashboard() {
             <TabsTrigger value="holdings">Sở hữu tài sản</TabsTrigger>
             <TabsTrigger value="nav">Phân tích NAV</TabsTrigger>
             <TabsTrigger value="avg-price">Giá trung bình</TabsTrigger>
+            <TabsTrigger value="trade-book">Sổ lệnh</TabsTrigger>
             <TabsTrigger value="accounts">Quản lý tài khoản</TabsTrigger>
             <TabsTrigger value="history">Lịch sử giao dịch</TabsTrigger>
             {canManage && <TabsTrigger value="settings">Cài đặt</TabsTrigger>}
@@ -666,6 +668,11 @@ export default function FundDashboard() {
           {/* Account Management Tab */}
           <TabsContent value="accounts" className="space-y-4">
             <AccountManagement fundId={fundData.id} />
+          </TabsContent>
+
+          {/* Trade Book Tab */}
+          <TabsContent value="trade-book" className="space-y-4">
+            <TradeBook fundId={fundData.id} />
           </TabsContent>
 
           {/* Transaction History Tab */}
