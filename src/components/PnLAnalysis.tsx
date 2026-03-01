@@ -44,6 +44,7 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
     const [usdtPnL, setUsdtPnL] = useState<UsdtPnLData | null>(null)
     const [futuresPnL, setFuturesPnL] = useState<FuturesPnLData | null>(null)
     const [loading, setLoading] = useState(true)
+    const [cryptoDisplayCurrency, setCryptoDisplayCurrency] = useState<'USDT' | 'VND'>('USDT')
 
     useEffect(() => {
         async function fetchPnLData() {
@@ -78,9 +79,13 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
         : 0
 
     // Calculate crypto gain (BTC price appreciation)
-    const cryptoGain = currentPrices
-        ? fundData.holdings.btc * (currentPrices.btcUsdt - fundData.avgPrices.btc.avgPrice) * currentPrices.usdtVnd
+    const cryptoGainUsdt = currentPrices
+        ? fundData.holdings.btc * (currentPrices.btcUsdt - fundData.avgPrices.btc.avgPrice)
         : 0
+    const cryptoGainVnd = currentPrices
+        ? cryptoGainUsdt * currentPrices.usdtVnd
+        : 0
+    const cryptoGain = cryptoDisplayCurrency === 'USDT' ? cryptoGainUsdt : cryptoGainVnd
 
     if (loading) {
         return (
@@ -237,6 +242,13 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
                     <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="h-5 w-5 text-purple-500" />
                         Lãi Chưa Thực Hiện - Crypto
+                        <button
+                            onClick={() => setCryptoDisplayCurrency(prev => prev === 'USDT' ? 'VND' : 'USDT')}
+                            className="ml-auto text-xs px-2 py-0.5 rounded border border-border hover:bg-accent transition-colors font-normal"
+                            title="Chuyển đổi đơn vị hiển thị"
+                        >
+                            {cryptoDisplayCurrency === 'USDT' ? '₫ VND' : '$ USDT'}
+                        </button>
                     </CardTitle>
                     <CardDescription>
                         Chênh lệch giá BTC
@@ -246,7 +258,7 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
                     <div className={`text-3xl font-bold ${cryptoGain >= 0 ? 'text-green-600' : 'text-red-600'
                         }`}>
                         {cryptoGain >= 0 ? '+' : ''}
-                        {formatCurrency(cryptoGain, 'VND')}
+                        {formatCurrency(cryptoGain, cryptoDisplayCurrency)}
                     </div>
                     <div className="mt-4 space-y-1 text-xs text-muted-foreground">
                         <div className="flex justify-between">
@@ -263,15 +275,17 @@ export default function PnLAnalysis({ fundId, fundData, currentPrices }: PnLAnal
                         </div>
                         <div className="flex justify-between pt-1 border-t">
                             <span>Chênh lệch:</span>
-                            <span className={cryptoGain >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                {cryptoGain >= 0 ? '+' : ''}
-                                {((currentPrices?.btcUsdt || 0) - fundData.avgPrices.btc.avgPrice).toLocaleString()} USDT
+                            <span className={cryptoGainUsdt >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                {cryptoGainUsdt >= 0 ? '+' : ''}
+                                {cryptoGainUsdt.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
                             </span>
                         </div>
-                        <div className="flex justify-between text-xs">
-                            <span>x Tỷ giá USDT:</span>
-                            <span>{currentPrices?.usdtVnd.toLocaleString()} VND</span>
-                        </div>
+                        {cryptoDisplayCurrency === 'VND' && (
+                            <div className="flex justify-between text-xs">
+                                <span>x Tỷ giá USDT:</span>
+                                <span>{currentPrices?.usdtVnd.toLocaleString()} VND</span>
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
