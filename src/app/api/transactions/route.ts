@@ -303,6 +303,7 @@ export async function GET(request: NextRequest) {
     const fundId = searchParams.get('fundId')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
+    const type = searchParams.get('type')
 
     if (!fundId) {
       return NextResponse.json(
@@ -320,8 +321,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const whereClause: Record<string, unknown> = { fundId }
+    if (type) {
+      whereClause.type = type
+    }
+
     const transactions = await db.transaction.findMany({
-      where: { fundId },
+      where: whereClause,
       include: {
         account: true
       },
@@ -331,7 +337,7 @@ export async function GET(request: NextRequest) {
     })
 
     const total = await db.transaction.count({
-      where: { fundId }
+      where: whereClause
     })
 
     return NextResponse.json({
