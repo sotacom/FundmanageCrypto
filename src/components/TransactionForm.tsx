@@ -43,7 +43,8 @@ const transactionTypes = [
   { value: 'sell_btc', label: 'Bán BTC (BTC → USDT)', currency: 'BTC' },
   { value: 'transfer_btc', label: 'Chuyển BTC', currency: 'BTC' },
   { value: 'earn_interest', label: 'Lãi suất USDT Earn', currency: 'USDT' },
-  { value: 'futures_pnl', label: 'PnL Futures (Long/Short)', currency: 'USDT' }
+  { value: 'futures_pnl', label: 'PnL Futures (Long/Short)', currency: 'USDT' },
+  { value: 'option_pnl_entry', label: 'PnL Option (BTC)', currency: 'USDT' }
 ]
 
 export default function TransactionForm({ onSubmit, onCancel, fundId, initialData, transactionId }: TransactionFormProps) {
@@ -60,7 +61,13 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
     note: initialData?.note || '',
     transactionDate: initialData?.createdAt
       ? utcToLocal(initialData.createdAt, currentFundTimezone)
-      : getCurrentDatetimeInTimezone(currentFundTimezone)
+      : getCurrentDatetimeInTimezone(currentFundTimezone),
+    // Option-specific fields
+    optionQty: '',
+    optionBuyPrice: '',
+    optionBuyFee: '',
+    optionSellPrice: '',
+    optionSellFee: '',
   })
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
@@ -70,11 +77,22 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const selectedTransactionType = transactionTypes.find(t => t.value === formData.type)
+  const isOptionEntry = formData.type === 'option_pnl_entry'
   const needsPrice = ['buy_usdt', 'sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
   const needsTransferLocations = ['transfer_usdt', 'transfer_btc'].includes(formData.type)
   const needsFromAccount = ['sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
-  const needsToAccount = ['buy_usdt', 'buy_btc', 'sell_btc', 'earn_interest', 'futures_pnl'].includes(formData.type)
+  const needsToAccount = ['buy_usdt', 'buy_btc', 'sell_btc', 'earn_interest', 'futures_pnl', 'option_pnl_entry'].includes(formData.type)
   const needsFee = ['buy_btc', 'sell_btc', 'futures_pnl'].includes(formData.type)
+
+  // Option PnL calculations
+  const optionQty = parseFloat(formData.optionQty) || 0
+  const optionBuyPrice = parseFloat(formData.optionBuyPrice) || 0
+  const optionBuyFee = parseFloat(formData.optionBuyFee) || 0
+  const optionSellPrice = parseFloat(formData.optionSellPrice) || 0
+  const optionSellFee = parseFloat(formData.optionSellFee) || 0
+  const optionPnL = (optionSellPrice - optionBuyPrice) * optionQty
+  const optionTotalFee = optionBuyFee + optionSellFee
+  const optionNetPnL = optionPnL - optionTotalFee
 
   // Fetch accounts
   useEffect(() => {
@@ -116,10 +134,37 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
     setError(null)
     setIsSubmitting(true)
 
-    // Validation
-    if (!formData.type || !formData.amount) {
-      setError('Vui lòng chọn loại giao dịch và nhập số lượng')
-      return
+    // Option-specific validation
+    if (isOptionEntry) {
+      if (!formData.optionQty || optionQty <= 0) {
+        setError('Vui lòng nhập số lượng hợp đồng')
+        setIsSubmitting(false)
+        return
+      }
+      if (!formData.optionBuyPrice || optionBuyPrice <= 0) {
+        setError('Vui lòng nhập giá mua (premium)')
+        setIsSubmitting(false)
+        return
+      }
+      if (!formData.optionSellPrice && optionSellPrice === 0 && !formData.optionSellPrice) {
+        // Allow sell price = 0 (option expired worthless) but require the field to be filled
+        if (formData.optionSellPrice === '') {
+          setError('Vui lòng nhập giá bán (premium). Nhập 0 nếu option hết hạn không giá trị.')
+          setIsSubmitting(false)
+          return
+        }
+      }
+      if (!formData.toAccountId) {
+        setError('Vui lòng chọn tài khoản')
+        setIsSubmitting(false)
+        return
+      }
+    } else {
+      // Standard validation
+      if (!formData.type || !formData.amount) {
+        setError('Vui lòng chọn loại giao dịch và nhập số lượng')
+        return
+      }
     }
 
     if (needsPrice && !formData.price) {
@@ -210,17 +255,37 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
 
     try {
       const method = transactionId ? 'PUT' : 'POST'
+
+      // For option entries, convert to futures_pnl
+      let submitType = formData.type
+      let submitAmount = parseFloat(formData.amount)
+      let submitFee: number | null = needsFee ? parseFloat(formData.fee) : null
+      let submitNote = formData.note
+      let submitFeeCurrency = formData.feeCurrency || null
+
+      if (isOptionEntry) {
+        submitType = 'futures_pnl'
+        submitAmount = optionPnL
+        submitFee = optionTotalFee
+        submitFeeCurrency = 'USDT'
+        // Build structured note
+        const details = `Qty: ${optionQty}, Buy: ${optionBuyPrice} USDT, Sell: ${optionSellPrice} USDT, BuyFee: ${optionBuyFee} USDT, SellFee: ${optionSellFee} USDT`
+        submitNote = `[Option] ${formData.note ? formData.note + ' | ' : ''}${details}`
+      }
+
       const body = {
         fundId,
         id: transactionId,
-        ...formData,
+        type: submitType,
         accountId: needsToAccount && !needsFromAccount ? formData.toAccountId : null,
         fromLocation: (needsFromAccount || needsTransferLocations) ? formData.fromAccountId : null,
         toLocation: (needsToAccount || needsTransferLocations) ? formData.toAccountId : null,
-        amount: parseFloat(formData.amount),
+        amount: submitAmount,
         price: needsPrice ? parseFloat(formData.price) : null,
-        fee: needsFee ? parseFloat(formData.fee) : null,
-        currency: selectedTransactionType?.currency || 'VND',
+        fee: submitFee,
+        feeCurrency: isOptionEntry ? submitFeeCurrency : (needsFee ? formData.feeCurrency : null),
+        currency: isOptionEntry ? 'USDT' : (selectedTransactionType?.currency || 'VND'),
+        note: submitNote,
         // Convert transaction date from fund timezone to UTC before saving
         transactionDate: formData.transactionDate
           ? localToUTC(formData.transactionDate, currentFundTimezone)
@@ -251,7 +316,12 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             toAccountId: '',
             fromAccountId: '',
             note: '',
-            transactionDate: getCurrentDatetimeInTimezone(currentFundTimezone)
+            transactionDate: getCurrentDatetimeInTimezone(currentFundTimezone),
+            optionQty: '',
+            optionBuyPrice: '',
+            optionBuyFee: '',
+            optionSellPrice: '',
+            optionSellFee: '',
           })
         }
         setError(null)
@@ -361,21 +431,137 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
             </Select>
           </div>
 
-          {/* Số lượng */}
-          <div className="space-y-2">
-            <Label htmlFor="amount">
-              Số lượng {selectedTransactionType ? `(${selectedTransactionType.currency})` : ''}
-            </Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.00000001"
-              placeholder="Nhập số lượng"
-              value={formData.amount}
-              onChange={(e) => handleInputChange('amount', e.target.value)}
-              required
-            />
-          </div>
+          {/* Số lượng (ẩn khi là Option entry) */}
+          {!isOptionEntry && (
+            <div className="space-y-2">
+              <Label htmlFor="amount">
+                Số lượng {selectedTransactionType ? `(${selectedTransactionType.currency})` : ''}
+              </Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.00000001"
+                placeholder="Nhập số lượng"
+                value={formData.amount}
+                onChange={(e) => handleInputChange('amount', e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          {/* Option Trade Fields */}
+          {isOptionEntry && (
+            <div className="space-y-4">
+              {/* Buy side */}
+              <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-3">
+                <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">📥 Phía Mua (Open)</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="optionQty" className="text-xs">Số lượng</Label>
+                    <Input
+                      id="optionQty"
+                      type="number"
+                      step="0.01"
+                      placeholder="1.0"
+                      value={formData.optionQty}
+                      onChange={(e) => handleInputChange('optionQty', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="optionBuyPrice" className="text-xs">Giá mua (USDT)</Label>
+                    <Input
+                      id="optionBuyPrice"
+                      type="number"
+                      step="0.01"
+                      placeholder="120.00"
+                      value={formData.optionBuyPrice}
+                      onChange={(e) => handleInputChange('optionBuyPrice', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="optionBuyFee" className="text-xs">Phí mua (USDT)</Label>
+                    <Input
+                      id="optionBuyFee"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.50"
+                      value={formData.optionBuyFee}
+                      onChange={(e) => handleInputChange('optionBuyFee', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sell side */}
+              <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20 p-4 space-y-3">
+                <p className="text-sm font-semibold text-green-700 dark:text-green-400">📤 Phía Bán (Close)</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Số lượng</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.optionQty}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="optionSellPrice" className="text-xs">Giá bán (USDT)</Label>
+                    <Input
+                      id="optionSellPrice"
+                      type="number"
+                      step="0.01"
+                      placeholder="180.00"
+                      value={formData.optionSellPrice}
+                      onChange={(e) => handleInputChange('optionSellPrice', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="optionSellFee" className="text-xs">Phí bán (USDT)</Label>
+                    <Input
+                      id="optionSellFee"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.50"
+                      value={formData.optionSellFee}
+                      onChange={(e) => handleInputChange('optionSellFee', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto-calculated preview */}
+              {optionQty > 0 && (formData.optionBuyPrice || formData.optionSellPrice) && (
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+                  <p className="text-sm font-semibold">📊 Kết quả tính toán</p>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">PnL</p>
+                      <p className={`font-bold ${optionPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {optionPnL >= 0 ? '+' : ''}{optionPnL.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Tổng phí</p>
+                      <p className="font-bold text-orange-600">
+                        -{optionTotalFee.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">PnL ròng</p>
+                      <p className={`font-bold ${optionNetPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {optionNetPnL >= 0 ? '+' : ''}{optionNetPnL.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ({optionSellPrice} − {optionBuyPrice}) × {optionQty} = {optionPnL >= 0 ? '+' : ''}{optionPnL.toFixed(2)} USDT
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Giá và Tổng VND (cho USDT) hoặc chỉ Giá (cho BTC) */}
           {needsPrice && (
