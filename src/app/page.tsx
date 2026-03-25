@@ -11,6 +11,7 @@ import TransactionHistory from '@/components/TransactionHistory'
 import FundSettings from '@/components/FundSettings'
 import PnLAnalysis from '@/components/PnLAnalysis'
 import TradeBook from '@/components/TradeBook'
+import CsvImport from '@/components/CsvImport'
 import AccountManagement from '@/components/AccountManagement'
 import { formatCurrency, formatNumber, formatPercentage } from '@/lib/format'
 import { SiteHeader } from '@/components/site-header'
@@ -677,6 +678,9 @@ export default function FundDashboard() {
 
           {/* Transaction History Tab */}
           <TabsContent value="history" className="space-y-4">
+            <div className="flex justify-end">
+              <CsvImport fundId={fundData.id} />
+            </div>
             <TransactionHistory
               fundId={fundData.id}
               refreshTrigger={refreshTrigger}

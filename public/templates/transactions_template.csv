@@ -1,0 +1,11 @@
+date,type,amount,price,fee,fee_currency,from_account,to_account,note,opt_qty,opt_buy_price,opt_buy_fee,opt_sell_price,opt_sell_fee
+2026-01-01 09:00,capital_in,300000000,,,,,,Góp vốn lần đầu,,,,,
+2026-01-02 10:30,buy_usdt,5000,26500,,,,"Binance 1",Mua USDT P2P,,,,,
+2026-01-03 11:00,buy_btc,0.05,65000,0.5,USDT,"Binance 1","Binance 1",Mua BTC spot,,,,,
+2026-01-04 14:00,sell_btc,0.02,67000,0.3,USDT,"Binance 1","Binance 1",Bán BTC chốt lời,,,,,
+2026-01-05 08:00,transfer_usdt,1000,,,,"Binance 1","Ví lạnh",Chuyển USDT,,,,,
+2026-01-06 00:00,earn_interest,2.5,,,,,"Binance 1",Lãi Earn tuần,,,,,
+2026-01-07 16:00,futures_pnl,45.5,,3.2,USDT,,"Binance 1",Long BTC 65k,,,,,
+2026-01-08 10:00,sell_usdt,2000,27000,,,"Binance 1",,Bán USDT P2P,,,,,
+2026-01-09 14:00,capital_out,50000000,,,,,,Rút lợi nhuận,,,,,
+2026-01-10 15:00,option_pnl,,,,,,"Binance 1",BTC Call 65k,1.5,120,0.5,180,0.5
