@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, Download, Loader2 } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, Download, Loader2, ClipboardPaste } from 'lucide-react'
 import { usePermission } from '@/contexts/PermissionContext'
 import { localToUTC } from '@/lib/timezone-utils'
 import Papa from 'papaparse'
@@ -114,6 +115,8 @@ export default function CsvImport({ fundId }: CsvImportProps) {
   const [importResult, setImportResult] = useState<{ imported: number } | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string>('')
+  const [csvText, setCsvText] = useState<string>('')
+  const [inputMode, setInputMode] = useState<'file' | 'paste'>('file')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch accounts for name → ID mapping
@@ -206,55 +209,59 @@ export default function CsvImport({ fundId }: CsvImportProps) {
     return errors
   }
 
+  // Shared logic: process parsed CSV data into validated rows
+  const processCsvData = (data: any[]) => {
+    const rows: ParsedRow[] = data.map((raw: any, index: number) => {
+      const type = (raw.type || '').trim().toLowerCase()
+      const amount = parseNumber(raw.amount)
+      const optQty = parseNumber(raw.opt_qty)
+      const optBuyPrice = parseNumber(raw.opt_buy_price)
+      const optBuyFee = parseNumber(raw.opt_buy_fee)
+      const optSellPrice = parseNumber(raw.opt_sell_price)
+      const optSellFee = parseNumber(raw.opt_sell_fee)
+
+      const row: ParsedRow = {
+        rowNumber: index + 2, // +2 because header is row 1, data starts at row 2
+        date: (raw.date || '').trim(),
+        type,
+        amount: amount ?? 0,
+        price: parseNumber(raw.price),
+        fee: parseNumber(raw.fee),
+        feeCurrency: (raw.fee_currency || '').trim() || undefined,
+        fromAccount: (raw.from_account || '').trim() || undefined,
+        toAccount: (raw.to_account || '').trim() || undefined,
+        note: (raw.note || '').trim() || undefined,
+        optQty,
+        optBuyPrice,
+        optBuyFee: optBuyFee ?? 0,
+        optSellPrice,
+        optSellFee: optSellFee ?? 0,
+        errors: [],
+        isValid: true,
+      }
+
+      row.errors = validateRow(row)
+      row.isValid = row.errors.length === 0
+      return row
+    })
+
+    setParsedRows(rows)
+    setStep('preview')
+  }
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setFileName(file.name)
+    setInputMode('file')
     setImportError(null)
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       encoding: 'UTF-8',
-      complete: (results) => {
-        const rows: ParsedRow[] = results.data.map((raw: any, index: number) => {
-          const type = (raw.type || '').trim().toLowerCase()
-          const amount = parseNumber(raw.amount)
-          const optQty = parseNumber(raw.opt_qty)
-          const optBuyPrice = parseNumber(raw.opt_buy_price)
-          const optBuyFee = parseNumber(raw.opt_buy_fee)
-          const optSellPrice = parseNumber(raw.opt_sell_price)
-          const optSellFee = parseNumber(raw.opt_sell_fee)
-
-          const row: ParsedRow = {
-            rowNumber: index + 2, // +2 because header is row 1, data starts at row 2
-            date: (raw.date || '').trim(),
-            type,
-            amount: amount ?? 0,
-            price: parseNumber(raw.price),
-            fee: parseNumber(raw.fee),
-            feeCurrency: (raw.fee_currency || '').trim() || undefined,
-            fromAccount: (raw.from_account || '').trim() || undefined,
-            toAccount: (raw.to_account || '').trim() || undefined,
-            note: (raw.note || '').trim() || undefined,
-            optQty,
-            optBuyPrice,
-            optBuyFee: optBuyFee ?? 0,
-            optSellPrice,
-            optSellFee: optSellFee ?? 0,
-            errors: [],
-            isValid: true,
-          }
-
-          row.errors = validateRow(row)
-          row.isValid = row.errors.length === 0
-          return row
-        })
-
-        setParsedRows(rows)
-        setStep('preview')
-      },
+      complete: (results) => processCsvData(results.data),
       error: (error) => {
         setImportError(`Lỗi đọc file CSV: ${error.message}`)
       }
@@ -262,6 +269,36 @@ export default function CsvImport({ fundId }: CsvImportProps) {
 
     // Reset input so same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handlePasteSubmit = () => {
+    const text = csvText.trim()
+    if (!text) {
+      setImportError('Vui lòng dán nội dung CSV')
+      return
+    }
+
+    setFileName('Dán trực tiếp')
+    setInputMode('paste')
+    setImportError(null)
+
+    const results = Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+    })
+
+    if (results.errors && results.errors.length > 0) {
+      const firstErr = results.errors[0]
+      setImportError(`Lỗi parse CSV dòng ${(firstErr as any).row ? (firstErr as any).row + 2 : '?'}: ${(firstErr as any).message || 'Không rõ'}`)
+      return
+    }
+
+    if (!results.data || results.data.length === 0) {
+      setImportError('Không tìm thấy dữ liệu trong nội dung CSV')
+      return
+    }
+
+    processCsvData(results.data)
   }
 
   const handleImport = async () => {
@@ -357,6 +394,7 @@ export default function CsvImport({ fundId }: CsvImportProps) {
     setImportResult(null)
     setImportError(null)
     setFileName('')
+    setCsvText('')
   }
 
   const handleClose = (open: boolean) => {
@@ -385,28 +423,66 @@ export default function CsvImport({ fundId }: CsvImportProps) {
         <DialogHeader>
           <DialogTitle>Import giao dịch từ CSV</DialogTitle>
           <DialogDescription>
-            Upload file CSV để import nhiều giao dịch cùng lúc
+            Upload file CSV hoặc dán nội dung CSV để import nhiều giao dịch cùng lúc
           </DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: Upload */}
+        {/* Step 1: Upload / Paste */}
         {step === 'upload' && (
           <div className="space-y-4">
-            <div
-              className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-muted-foreground/50 transition-colors cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <p className="text-sm font-medium">Nhấn để chọn file CSV</p>
-              <p className="text-xs text-muted-foreground mt-1">Hỗ trợ tối đa 1000 dòng</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </div>
+            <Tabs defaultValue="file" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="file" className="flex items-center gap-1.5">
+                  <Upload className="h-3.5 w-3.5" />
+                  Upload file
+                </TabsTrigger>
+                <TabsTrigger value="paste" className="flex items-center gap-1.5">
+                  <ClipboardPaste className="h-3.5 w-3.5" />
+                  Dán nội dung
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Tab: Upload file */}
+              <TabsContent value="file" className="mt-4">
+                <div
+                  className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-muted-foreground/50 transition-colors cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                  <p className="text-sm font-medium">Nhấn để chọn file CSV</p>
+                  <p className="text-xs text-muted-foreground mt-1">Hỗ trợ tối đa 1000 dòng</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </div>
+              </TabsContent>
+
+              {/* Tab: Paste CSV */}
+              <TabsContent value="paste" className="mt-4 space-y-3">
+                <textarea
+                  className="w-full h-48 p-3 text-sm font-mono border rounded-lg bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
+                  placeholder={`Dán nội dung CSV vào đây...\n\nVí dụ:\ndate,type,amount,price,fee,fee_currency,from_account,to_account,note\n2026-03-01 09:00,capital_in,300000000,,,,,,Góp vốn`}
+                  value={csvText}
+                  onChange={(e) => setCsvText(e.target.value)}
+                />
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-muted-foreground">
+                    {csvText.trim() ? `${csvText.trim().split('\n').length} dòng (bao gồm header)` : 'Chưa có nội dung'}
+                  </p>
+                  <Button
+                    onClick={handlePasteSubmit}
+                    disabled={!csvText.trim()}
+                    size="sm"
+                  >
+                    Phân tích nội dung
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
 
             {importError && (
               <Alert variant="destructive">
@@ -442,9 +518,9 @@ export default function CsvImport({ fundId }: CsvImportProps) {
         {step === 'preview' && (
           <div className="space-y-4">
             {/* Summary */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <Badge variant="outline" className="flex items-center gap-1">
-                <FileText className="h-3 w-3" />
+                {inputMode === 'paste' ? <ClipboardPaste className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
                 {fileName}
               </Badge>
               <Badge variant="secondary" className="text-green-700 dark:text-green-400">
@@ -536,7 +612,7 @@ export default function CsvImport({ fundId }: CsvImportProps) {
             {/* Actions */}
             <div className="flex justify-between items-center pt-2">
               <Button variant="outline" onClick={resetState}>
-                ← Chọn file khác
+                ← Nhập lại
               </Button>
               <div className="flex items-center gap-3">
                 {errorCount > 0 && (
