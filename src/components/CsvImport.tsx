@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, Download, Loader2, ClipboardPaste } from 'lucide-react'
+import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, Download, Loader2, ClipboardPaste, Bot, Copy, Check } from 'lucide-react'
 import { usePermission } from '@/contexts/PermissionContext'
 import { localToUTC } from '@/lib/timezone-utils'
 import Papa from 'papaparse'
@@ -43,6 +43,92 @@ interface AccountInfo {
   name: string
   type: string
 }
+
+const AI_PROMPT = `Hãy giúp tôi chuyển đổi lịch sử giao dịch bên dưới thành file CSV theo format chuẩn.
+
+## FORMAT CSV YÊU CẦU:
+
+Header:
+date,type,amount,price,fee,fee_currency,from_account,to_account,note,opt_qty,opt_buy_price,opt_buy_fee,opt_sell_price,opt_sell_fee
+
+## RULES:
+
+1. Cột \`date\`: format \`YYYY-MM-DD HH:mm\` (nếu không có giờ thì dùng \`00:00\`)
+2. Cột \`type\` phải là 1 trong các giá trị sau (chính xác, viết thường):
+   - \`capital_in\` — Góp vốn bằng VND
+   - \`capital_out\` — Rút vốn/lợi nhuận bằng VND
+   - \`buy_usdt\` — Mua USDT bằng VND (amount = số USDT, price = giá VND/USDT)
+   - \`sell_usdt\` — Bán USDT thu VND (amount = số USDT, price = giá VND/USDT)
+   - \`transfer_usdt\` — Chuyển USDT giữa tài khoản
+   - \`buy_btc\` — Mua BTC bằng USDT (amount = số BTC, price = giá USDT/BTC)
+   - \`sell_btc\` — Bán BTC thu USDT (amount = số BTC, price = giá USDT/BTC)
+   - \`transfer_btc\` — Chuyển BTC giữa tài khoản
+   - \`earn_interest\` — Lãi suất USDT Earn (amount = USDT lãi)
+   - \`futures_pnl\` — PnL Futures Long/Short (amount = PnL USDT, cho phép âm nếu lỗ)
+   - \`option_pnl\` — PnL Option BTC (KHÔNG điền amount/fee, điền 5 cột opt_*)
+
+3. Cột \`amount\`:
+   - capital_in/capital_out: số VND
+   - buy_usdt/sell_usdt/transfer_usdt/earn_interest/futures_pnl: số USDT
+   - buy_btc/sell_btc/transfer_btc: số BTC
+   - futures_pnl: cho phép số âm (lỗ)
+   - option_pnl: để trống (hệ thống tự tính)
+
+4. Cột \`price\`:
+   - buy_usdt/sell_usdt: giá VND trên 1 USDT
+   - buy_btc/sell_btc: giá USDT trên 1 BTC
+   - Các loại khác: để trống
+
+5. Cột \`fee\` và \`fee_currency\`:
+   - Nếu có phí giao dịch: điền số phí và đơn vị phí
+   - Nếu không có phí: để trống cả 2 cột
+   - Cho \`buy_btc\` và \`sell_btc\`:
+     - Nếu phí tính bằng USDT → \`fee_currency = USDT\`
+     - Nếu phí tính bằng BTC → \`fee_currency = BTC\`
+   - Cho \`transfer_usdt\`: fee_currency = USDT
+   - Cho \`transfer_btc\`: fee_currency = BTC
+   - Phí chuyển được trừ vào số nhận được ở đích
+   - Cho \`futures_pnl\`: fee_currency = USDT
+
+6. Cột \`from_account\` và \`to_account\`:
+   - Dùng TÊN tài khoản (ví dụ: "Binance 1", "Ví lạnh")
+   - buy_usdt: chỉ cần to_account
+   - sell_usdt: chỉ cần from_account
+   - buy_btc, sell_btc: cần cả from_account VÀ to_account
+   - transfer_usdt, transfer_btc: cần cả from_account VÀ to_account (phải khác nhau)
+   - earn_interest, futures_pnl, option_pnl: chỉ cần to_account
+   - capital_in, capital_out: để trống cả 2
+
+7. Cột \`note\`: ghi chú tùy ý, mô tả ngắn gọn giao dịch
+
+8. 5 cột \`opt_*\` chỉ dùng cho \`option_pnl\`:
+   - opt_qty: số lượng hợp đồng
+   - opt_buy_price: giá mua premium (USDT)
+   - opt_buy_fee: phí mua (USDT), mặc định 0
+   - opt_sell_price: giá bán premium (USDT), điền 0 nếu hết hạn không giá trị
+   - opt_sell_fee: phí bán (USDT), mặc định 0
+
+9. Dấu thập phân dùng \`.\` (dấu chấm), ví dụ: 0.05, 26500.50
+10. Nếu tên tài khoản chứa dấu phẩy, bọc trong ngoặc kép: "Tên, có dấu phẩy"
+11. Sắp xếp theo thời gian từ cũ → mới
+12. Với các loại khác option_pnl, 5 cột opt_* để trống
+
+## VÍ DỤ OUTPUT:
+
+\`\`\`csv
+date,type,amount,price,fee,fee_currency,from_account,to_account,note,opt_qty,opt_buy_price,opt_buy_fee,opt_sell_price,opt_sell_fee
+2026-01-01 09:00,capital_in,300000000,,,,,,Góp vốn lần đầu,,,,,
+2026-01-02 10:30,buy_usdt,5000,26500,,,,Binance 1,Mua USDT P2P,,,,,
+2026-01-03 11:00,buy_btc,0.05,65000,0.5,USDT,Binance 1,Binance 1,Mua BTC phí USDT,,,,,
+2026-01-05 08:00,transfer_usdt,500,,1,USDT,Binance 1,Ví lạnh,Chuyển USDT phí 1u,,,,,
+2026-01-07 16:00,futures_pnl,45.5,,3.2,USDT,,Binance 1,Long BTC 65k,,,,,
+2026-01-07 16:00,futures_pnl,-12.3,,1.5,USDT,,Binance 1,Short BTC thua lỗ,,,,,
+2026-01-10 15:00,option_pnl,,,,,,,Binance 1,BTC Call 65k,1.5,120,0.5,180,0.5
+\`\`\`
+
+## LỊCH SỬ GIAO DỊCH CẦN CHUYỂN ĐỔI:
+
+`
 
 const VALID_TYPES = [
   'capital_in', 'capital_out', 'buy_usdt', 'sell_usdt', 'transfer_usdt',
@@ -117,6 +203,7 @@ export default function CsvImport({ fundId }: CsvImportProps) {
   const [fileName, setFileName] = useState<string>('')
   const [csvText, setCsvText] = useState<string>('')
   const [inputMode, setInputMode] = useState<'file' | 'paste'>('file')
+  const [promptCopied, setPromptCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch accounts for name → ID mapping
@@ -431,14 +518,18 @@ export default function CsvImport({ fundId }: CsvImportProps) {
         {step === 'upload' && (
           <div className="space-y-4">
             <Tabs defaultValue="file" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="file" className="flex items-center gap-1.5">
                   <Upload className="h-3.5 w-3.5" />
                   Upload file
                 </TabsTrigger>
                 <TabsTrigger value="paste" className="flex items-center gap-1.5">
                   <ClipboardPaste className="h-3.5 w-3.5" />
-                  Dán nội dung
+                  Dán CSV
+                </TabsTrigger>
+                <TabsTrigger value="ai" className="flex items-center gap-1.5">
+                  <Bot className="h-3.5 w-3.5" />
+                  Prompt AI
                 </TabsTrigger>
               </TabsList>
 
@@ -480,6 +571,54 @@ export default function CsvImport({ fundId }: CsvImportProps) {
                   >
                     Phân tích nội dung
                   </Button>
+                </div>
+              </TabsContent>
+
+              {/* Tab: AI Prompt */}
+              <TabsContent value="ai" className="mt-4 space-y-3">
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium flex items-center gap-1.5">
+                        <Bot className="h-4 w-4" />
+                        Prompt cho AI (ChatGPT, Claude, Gemini...)
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Copy prompt bên dưới → dán vào AI cùng lịch sử giao dịch → copy kết quả CSV → dán vào tab &quot;Dán CSV&quot;
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(AI_PROMPT + '[DÁN LỊCH SỬ GIAO DỊCH Ở ĐÂY]')
+                        setPromptCopied(true)
+                        setTimeout(() => setPromptCopied(false), 2000)
+                      }}
+                    >
+                      {promptCopied ? (
+                        <><Check className="h-3.5 w-3.5 mr-1" /> Đã copy!</>
+                      ) : (
+                        <><Copy className="h-3.5 w-3.5 mr-1" /> Copy prompt</>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="relative">
+                    <pre className="text-xs font-mono bg-background border rounded-lg p-3 max-h-[35vh] overflow-y-auto whitespace-pre-wrap break-words text-muted-foreground leading-relaxed">
+                      {AI_PROMPT}[DÁN LỊCH SỬ GIAO DỊCH Ở ĐÂY]
+                    </pre>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+                  <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1.5">💡 Cách dùng:</p>
+                  <ol className="text-xs text-blue-600 dark:text-blue-400/80 space-y-1 list-decimal list-inside">
+                    <li>Bấm <strong>&quot;Copy prompt&quot;</strong> ở trên</li>
+                    <li>Dán vào ChatGPT / Claude / Gemini</li>
+                    <li>Thay <code className="px-1 bg-blue-100 dark:bg-blue-900/50 rounded">[DÁN LỊCH SỬ GIAO DỊCH Ở ĐÂY]</code> bằng dữ liệu thực</li>
+                    <li>Copy kết quả CSV từ AI</li>
+                    <li>Quay lại tab <strong>&quot;Dán CSV&quot;</strong> → dán vào → bấm &quot;Phân tích nội dung&quot;</li>
+                  </ol>
                 </div>
               </TabsContent>
             </Tabs>
