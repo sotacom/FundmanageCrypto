@@ -200,8 +200,26 @@ export async function recalculateFund(fundId: string) {
             case 'transfer_usdt':
                 // Chuyển USDT giữa các địa điểm
                 const usdtTransferAmount = tx.amount
+                let usdtTransferFee = 0
+
+                // Xử lý phí chuyển (nếu có) — phí trừ vào số nhận được
+                if (tx.fee && tx.fee > 0) {
+                    usdtTransferFee = tx.fee
+                    console.log(`Transfer USDT: Fee ${tx.fee} USDT deducted from received`)
+                }
+
+                const usdtTransferReceived = usdtTransferAmount - usdtTransferFee
+
                 updateAccount('USDT', tx.fromLocation, -usdtTransferAmount)
-                updateAccount('USDT', tx.toLocation, usdtTransferAmount)
+                updateAccount('USDT', tx.toLocation, usdtTransferReceived)
+
+                // Phí chuyển là chi phí thực → giảm tổng USDT và retained earnings
+                if (usdtTransferFee > 0) {
+                    const usdtStateForTransfer = getAssetState('USDT')
+                    usdtStateForTransfer.amount -= usdtTransferFee
+                    const transferFeeVnd = usdtTransferFee * (usdtStateForTransfer.avgPrice > 0 ? usdtStateForTransfer.avgPrice : (lastUsdtPrice > 0 ? lastUsdtPrice : 24000))
+                    accumulatedRetainedEarnings -= transferFeeVnd
+                }
                 break
 
             case 'buy_btc':
@@ -302,8 +320,28 @@ export async function recalculateFund(fundId: string) {
             case 'transfer_btc':
                 // Chuyển BTC giữa các địa điểm
                 const btcTransferAmount = tx.amount
+                let btcTransferFee = 0
+
+                // Xử lý phí chuyển (nếu có) — phí trừ vào số nhận được
+                if (tx.fee && tx.fee > 0) {
+                    btcTransferFee = tx.fee
+                    console.log(`Transfer BTC: Fee ${tx.fee} BTC deducted from received`)
+                }
+
+                const btcTransferReceived = btcTransferAmount - btcTransferFee
+
                 updateAccount('BTC', tx.fromLocation, -btcTransferAmount)
-                updateAccount('BTC', tx.toLocation, btcTransferAmount)
+                updateAccount('BTC', tx.toLocation, btcTransferReceived)
+
+                // Phí chuyển là chi phí thực → giảm tổng BTC và retained earnings
+                if (btcTransferFee > 0) {
+                    const btcStateForTransfer = getAssetState('BTC')
+                    btcStateForTransfer.amount -= btcTransferFee
+                    // Quy đổi phí BTC ra VND: BTC × avgPrice(USDT) × avgPrice(VND)
+                    const usdtPriceForBtcFee = getAssetState('USDT').avgPrice > 0 ? getAssetState('USDT').avgPrice : (lastUsdtPrice > 0 ? lastUsdtPrice : 24000)
+                    const btcFeeVnd = btcTransferFee * btcStateForTransfer.avgPrice * usdtPriceForBtcFee
+                    accumulatedRetainedEarnings -= btcFeeVnd
+                }
                 break
 
             case 'earn_interest':

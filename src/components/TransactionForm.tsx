@@ -82,7 +82,7 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
   const needsTransferLocations = ['transfer_usdt', 'transfer_btc'].includes(formData.type)
   const needsFromAccount = ['sell_usdt', 'buy_btc', 'sell_btc'].includes(formData.type)
   const needsToAccount = ['buy_usdt', 'buy_btc', 'sell_btc', 'earn_interest', 'futures_pnl', 'option_pnl_entry'].includes(formData.type)
-  const needsFee = ['buy_btc', 'sell_btc', 'futures_pnl'].includes(formData.type)
+  const needsFee = ['buy_btc', 'sell_btc', 'futures_pnl', 'transfer_usdt', 'transfer_btc'].includes(formData.type)
 
   // Option PnL calculations
   const optionQty = parseFloat(formData.optionQty) || 0
@@ -617,12 +617,14 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
           {needsFee && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="fee">Phí giao dịch</Label>
+                <Label htmlFor="fee">
+                  {needsTransferLocations ? 'Phí chuyển' : 'Phí giao dịch'}
+                </Label>
                 <Input
                   id="fee"
                   type="number"
                   step="0.00000001"
-                  placeholder="Nhập phí"
+                  placeholder="Nhập phí (tùy chọn)"
                   value={formData.fee}
                   onChange={(e) => handleInputChange('fee', e.target.value)}
                 />
@@ -634,8 +636,16 @@ export default function TransactionForm({ onSubmit, onCancel, fundId, initialDat
                     <SelectValue placeholder="Chọn đơn vị" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="BTC">BTC</SelectItem>
-                    <SelectItem value="USDT">USDT</SelectItem>
+                    {formData.type === 'transfer_usdt' ? (
+                      <SelectItem value="USDT">USDT</SelectItem>
+                    ) : formData.type === 'transfer_btc' ? (
+                      <SelectItem value="BTC">BTC</SelectItem>
+                    ) : (
+                      <>
+                        <SelectItem value="BTC">BTC</SelectItem>
+                        <SelectItem value="USDT">USDT</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

@@ -66,10 +66,10 @@ date,type,amount,price,fee,fee_currency,from_account,to_account,note,opt_qty,opt
 | `capital_out` | Rút vốn / Lợi nhuận | VND | ❌ | ❌ | ❌ | — |
 | `buy_usdt` | Mua USDT (VND → USDT) | USDT | ✅ VND/USDT | ❌ | ✅ | VND hoặc USDT |
 | `sell_usdt` | Bán USDT (USDT → VND) | USDT | ✅ VND/USDT | ✅ | ❌ | VND hoặc USDT |
-| `transfer_usdt` | Chuyển USDT | USDT | ❌ | ✅ | ✅ | — |
+| `transfer_usdt` | Chuyển USDT | USDT | ❌ | ✅ | ✅ | USDT |
 | `buy_btc` | Mua BTC (USDT → BTC) | BTC | ✅ USDT/BTC | ✅ | ✅ | **USDT hoặc BTC** |
 | `sell_btc` | Bán BTC (BTC → USDT) | BTC | ✅ USDT/BTC | ✅ | ✅ | **USDT hoặc BTC** |
-| `transfer_btc` | Chuyển BTC | BTC | ❌ | ✅ | ✅ | — |
+| `transfer_btc` | Chuyển BTC | BTC | ❌ | ✅ | ✅ | BTC |
 | `earn_interest` | Lãi suất USDT Earn | USDT | ❌ | ❌ | ✅ | — |
 | `futures_pnl` | PnL Futures | USDT (PnL, cho phép âm) | ❌ | ❌ | ✅ | USDT |
 | `option_pnl` | PnL Option | _(tự tính)_ | ❌ | ❌ | ✅ | _(tự tính)_ |
@@ -132,10 +132,15 @@ date,type,amount,price,fee,fee_currency,from_account,to_account,note,opt_qty,opt
 
 #### `transfer_usdt` / `transfer_btc` — Chuyển giữa tài khoản
 ```csv
-2026-01-05 08:00,transfer_usdt,1000,,,,Binance 1,Ví lạnh,Chuyển USDT backup
+2026-01-05 08:00,transfer_usdt,1000,,,,Binance 1,Ví lạnh,Chuyển USDT không phí
+2026-01-05 09:00,transfer_usdt,500,,1,USDT,Binance 1,Ví lạnh,Chuyển USDT phí 1 USDT
+2026-01-06 10:00,transfer_btc,0.1,,0.0001,BTC,Binance 1,Ví lạnh,Chuyển BTC phí 0.0001 BTC
 ```
 - `amount` = số lượng chuyển
 - `from_account` ≠ `to_account`
+- `fee` + `fee_currency` = phí chuyển (tùy chọn):
+  - Phí được **trừ vào số nhận được** ở tài khoản đích (ví dụ: chuyển 500 USDT, phí 1 USDT → đích nhận 499 USDT)
+  - Nếu không có phí: để trống cả 2 cột `fee` và `fee_currency`
 
 #### `earn_interest` — Lãi suất USDT Earn
 ```csv
@@ -228,6 +233,9 @@ date,type,amount,price,fee,fee_currency,from_account,to_account,note,opt_qty,opt
      - Nếu phí tính bằng USDT → `fee_currency = USDT` (ví dụ: fee=0.5, fee_currency=USDT)
      - Nếu phí tính bằng BTC → `fee_currency = BTC` (ví dụ: fee=0.00003, fee_currency=BTC)
      - Cần xác định chính xác đơn vị phí từ lịch sử giao dịch của sàn
+   - Cho `transfer_usdt`: fee_currency = USDT (phí chuyển USDT)
+   - Cho `transfer_btc`: fee_currency = BTC (phí chuyển BTC)
+   - Phí chuyển được trừ vào số nhận được ở đích (ví dụ: chuyển 500 USDT, phí 1 USDT → đích nhận 499 USDT)
    - Cho `buy_usdt`/`sell_usdt`: fee_currency thường là VND hoặc USDT
    - Cho `futures_pnl`: fee_currency = USDT
 
@@ -264,6 +272,8 @@ date,type,amount,price,fee,fee_currency,from_account,to_account,note,opt_qty,opt
 2026-01-03 15:00,buy_btc,0.03,65200,0.00003,BTC,Binance 1,Binance 1,Mua BTC phí BTC,,,,,
 2026-01-04 14:00,sell_btc,0.02,67000,0.3,USDT,Binance 1,Binance 1,Bán BTC phí USDT,,,,,
 2026-01-04 16:00,sell_btc,0.01,67500,0.00001,BTC,Binance 1,Binance 1,Bán BTC phí BTC,,,,,
+2026-01-05 08:00,transfer_usdt,1000,,,,Binance 1,Ví lạnh,Chuyển USDT,,,,,
+2026-01-05 09:00,transfer_usdt,500,,1,USDT,Binance 1,Ví lạnh,Chuyển USDT phí 1u,,,,,
 2026-01-07 16:00,futures_pnl,45.5,,3.2,USDT,,Binance 1,Long BTC 65k,,,,,
 2026-01-07 16:00,futures_pnl,-12.3,,1.5,USDT,,Binance 1,Short BTC thua lỗ,,,,,
 2026-01-10 15:00,option_pnl,,,,,,,Binance 1,BTC Call 65k,1.5,120,0.5,180,0.5
