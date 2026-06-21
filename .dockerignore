@@ -1,13 +1,52 @@
+# Docker
 Dockerfile
 .dockerignore
+docker-compose.yml
+
+# Dependencies (rebuilt in container)
 node_modules
-npm-debug.log
-README.md
+
+# Build output (rebuilt in container)
 .next
+
+# Version control
 .git
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-test
+
+# Environment files (secrets - pass via docker-compose)
+.env
+.env.*
+
+# Database files
+*.db
+*.db-journal
+
+# Documentation (not needed in image)
+docs/
+*.md
+!README.md
+
+# Mini-services
+mini-services/
+
+# Backup files
+fundmanage-backup-*.json
+
+# Logs
 *.log
-local-*
+dev.log
+server.log
+
+# Vercel
+.vercel
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode
+.idea
+
+# Debug
+npm-debug.log
+yarn-debug.log
+yarn-error.log
