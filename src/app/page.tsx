@@ -420,13 +420,16 @@ export default function FundDashboard() {
                     {formatCurrency(fundData.holdings.btc, 'BTC')}
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
-                    {formatCurrency(fundData.holdings.btc * fundData.avgPrices.btc.avgPrice * fundData.avgPrices.usdt.avgPrice, 'VND')}
+                    {currentPrices?.btcUsdt
+                      ? `${formatNumber(fundData.holdings.btc * currentPrices.btcUsdt, 2)} USDT`
+                      : `${formatNumber(fundData.holdings.btc * fundData.avgPrices.btc.avgPrice, 2)} USDT`
+                    }
                   </div>
                   <div className="mt-2 pt-2 border-t">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tỷ trọng:</span>
                       <span className="font-medium">
-                        {((fundData.holdings.btc * fundData.avgPrices.btc.avgPrice * fundData.avgPrices.usdt.avgPrice / fundData.currentNav.vnd) * 100).toFixed(1)}%
+                        {((fundData.holdings.btc * (currentPrices?.btcUsdt || fundData.avgPrices.btc.avgPrice) * fundData.avgPrices.usdt.avgPrice / fundData.currentNav.vnd) * 100).toFixed(1)}%
                       </span>
                     </div>
                   </div>
