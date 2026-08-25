@@ -286,10 +286,13 @@ export default function FundDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(fundData.currentNav.vnd, 'VND')}
+                {formatNumber(
+                  fundData.holdings.usdt + fundData.holdings.btc * (currentPrices?.btcUsdt || fundData.avgPrices.btc.avgPrice),
+                  2
+                )} USDT
               </div>
               <p className="text-xs text-blue-100 mt-1 opacity-80">
-                Vốn ban đầu: {formatNumber(fundData.equity.initialCapital, 0)} VND
+                {formatCurrency(fundData.currentNav.vnd, 'VND')}
               </p>
             </CardContent>
           </Card>
