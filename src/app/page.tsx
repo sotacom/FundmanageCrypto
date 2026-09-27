@@ -285,15 +285,24 @@ export default function FundDashboard() {
               <TrendingUp className="h-4 w-4 text-blue-100" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {formatNumber(
-                  fundData.holdings.usdt + fundData.holdings.btc * (currentPrices?.btcUsdt || fundData.avgPrices.btc.avgPrice),
-                  2
-                )} USDT
-              </div>
-              <p className="text-xs text-blue-100 mt-1 opacity-80">
-                {formatCurrency(fundData.currentNav.vnd, 'VND')}
-              </p>
+              {(() => {
+                const navUsdt = fundData.holdings.usdt + fundData.holdings.btc * (currentPrices?.btcUsdt || fundData.avgPrices.btc.avgPrice)
+                const costUsdt = fundData.avgPrices.usdt.totalBought
+                const pnlPercent = costUsdt > 0 ? ((navUsdt - costUsdt) / costUsdt) * 100 : 0
+                return (
+                  <>
+                    <div className="text-2xl font-bold">
+                      {formatNumber(navUsdt, 2)} USDT
+                    </div>
+                    <p className={`text-sm font-semibold mt-1 ${pnlPercent >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+                      {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}% so với vốn ({formatNumber(costUsdt, 2)} USDT)
+                    </p>
+                    <p className="text-xs text-blue-100 mt-1 opacity-80">
+                      {formatCurrency(fundData.currentNav.vnd, 'VND')}
+                    </p>
+                  </>
+                )
+              })()}
             </CardContent>
           </Card>
 
